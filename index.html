@@ -1106,6 +1106,27 @@
     .media-upload {
         display: none;
     }
+
+        .media-btn {
+    width: 45px;
+    height: 45px;
+    background: var(--bg-chat);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    font-size: 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    margin-right: 10px;
+}
+
+.media-btn:hover {
+    background: var(--primary);
+    border-color: var(--primary);
+    transform: scale(1.1);
+}
     
     .message-image {
         max-width: 300px;
@@ -1338,61 +1359,60 @@
         window.currentRoom = currentRoom;
 
         window.login = async function() {
-            const input = document.getElementById('loginInput');
-            const name = input.value.trim();
-            const errorDiv = document.getElementById('loginError');
-            
-            if (!name) {
-                alert('Пожалуйста, введите ваше имя');
-                return;
-            }
+    const input = document.getElementById('loginInput');
+    const name = input.value.trim();
+    const errorDiv = document.getElementById('loginError');
+    
+    if (!name) {
+        alert('Пожалуйста, введите ваше имя');
+        return;
+    }
 
-            const usersRef = ref(database, 'users');
-            const snapshot = await get(usersRef);
-            const users = snapshot.val() || {};
-            
-            const nameExists = Object.values(users).some(user => 
-                user.name && user.name.toLowerCase() === name.toLowerCase() && user.online
-            );
+    const usersRef = ref(database, 'users');
+    const snapshot = await get(usersRef);
+    const users = snapshot.val() || {};
+    
+    const nameExists = Object.values(users).some(user => 
+        user.name && user.name.toLowerCase() === name.toLowerCase() && user.online
+    );
 
-            if (nameExists) {
-                errorDiv.style.display = 'block';
-                return;
-            }
+    if (nameExists) {
+        errorDiv.style.display = 'block';
+        return;
+    }
 
-            errorDiv.style.display = 'none';
+    errorDiv.style.display = 'none';
+    window.isDeveloper = name === 'Developer';
 
-            window.isDeveloper = name === 'Developer';
+    const userId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    window.currentUser = {
+        id: userId,
+        name: name,
+        avatar: 1,
+        avatarImage: null,
+        joinedAt: Date.now(),
+        isDeveloper: window.isDeveloper
+    };
 
-            const userId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            window.currentUser = {
-                id: userId,
-                name: name,
-                avatar: 1,
-                avatarImage: null,
-                joinedAt: Date.now(),
-                isDeveloper: window.isDeveloper
-            };
+    localStorage.setItem('waveUser', JSON.stringify(window.currentUser));
 
-            localStorage.setItem('waveUser', JSON.stringify(window.currentUser));
+    const userRef = ref(database, `users/${userId}`);
+    await set(userRef, {
+        name: name,
+        avatar: 1,
+        avatarImage: null,
+        online: true,
+        isDeveloper: window.isDeveloper,
+        lastSeen: serverTimestamp()
+    });
 
-            const userRef = ref(database, `users/${userId}`);
-            await set(userRef, {
-                name: name,
-                avatar: 1,
-                avatarImage: null,
-                online: true,
-                isDeveloper: window.isDeveloper,
-                lastSeen: serverTimestamp()
-            });
+    onDisconnect(userRef).remove();
 
-            onDisconnect(userRef).remove();
-
-            document.getElementById('loginModal').classList.add('hidden');
-
-            updateUserUI();
-            initChat();
-        };
+    document.getElementById('loginModal').classList.add('hidden');
+    updateUserUI();
+    initChat();
+    showUsersList();
+};
 
         window.updateUserUI = function() {
             if (!window.currentUser) return;
@@ -1593,17 +1613,30 @@
             document.getElementById('avatarSelector').classList.remove('show');
         };
 
-        window.initChat = function() {
-            loadMessages();
-            loadOnlineUsers();
-            setupEventListeners();
-            
-            if (window.isDeveloper) {
-                document.getElementById('clearChatDevBtn').style.display = 'flex';
-            }
-        };
+            window.showUsersList = function() {
+                window.currentRoom = null;
+                document.getElementById('messagesContainer').innerHTML = `
+                    <div style="padding: 20px; text-align: center;">
+                        <h2 style="margin-bottom: 20px;">Выберите чат или создайте группу</h2>
+                        <button onclick="showCreateGroup()" style="padding: 12px 24px; background: var(--primary); color: white; border: none; border-radius: 10px; cursor: pointer;">Создать группу</button>
+                    </div>
+                `;
+            };
+
+        
+       window.initChat = function() {
+    loadOnlineUsers();
+    setupEventListeners();
+    
+    if (window.isDeveloper) {
+        document.getElementById('clearChatDevBtn').style.display = 'flex';
+    }
+};
+
 
        window.loadMessages = function() {
+    if (!window.currentRoom) return;
+    
     const messagesRef = ref(database, `messages/${window.currentRoom}`);
     
     if (window.messagesListener) {
@@ -1625,44 +1658,91 @@
         container.scrollTop = container.scrollHeight;
     });
 };
-
         window.loadOnlineUsers = function() {
-            const usersRef = ref(database, 'users');
-            
-            onValue(usersRef, (snapshot) => {
-                const users = snapshot.val() || {};
-                const onlineUsersDiv = document.getElementById('onlineUsers');
-                const onlineCount = document.getElementById('onlineCount');
+    const usersRef = ref(database, 'users');
+    const groupsRef = ref(database, 'groups');
+    
+    onValue(usersRef, (snapshot) => {
+        const users = snapshot.val() || {};
+        const onlineUsersDiv = document.getElementById('onlineUsers');
+        
+        let searchHtml = `
+            <div style="padding: 10px;">
+                <input type="text" id="searchUser" placeholder="Поиск пользователей..." 
+                    style="width: 100%; padding: 10px; background: var(--bg-chat); border: 1px solid var(--border); 
+                    border-radius: 8px; color: var(--text-primary);" 
+                    oninput="filterUsers(this.value)">
+            </div>
+        `;
+        
+        let usersHtml = '<div id="usersList">';
+        
+        Object.entries(users).forEach(([userId, user]) => {
+            if (user.online && userId !== window.currentUser.id) {
+                let avatarHtml;
+                if (user.avatarImage) {
+                    avatarHtml = `<div class="user-item-avatar"><img src="${user.avatarImage}" alt=""><span class="user-online-indicator"></span></div>`;
+                } else {
+                    avatarHtml = `<div class="user-item-avatar avatar-gradient-${user.avatar || 1}">${user.name.charAt(0).toUpperCase()}<span class="user-online-indicator"></span></div>`;
+                }
                 
-                onlineUsersDiv.innerHTML = '';
-                let count = 0;
+                usersHtml += `
+                    <div class="user-item" data-username="${user.name.toLowerCase()}" onclick="openPrivateChat('${userId}', '${user.name}')">
+                        ${avatarHtml}
+                        <div class="user-item-name">${user.name}${user.isDeveloper ? ' <span class="developer-badge">DEV</span>' : ''}</div>
+                        <div class="user-item-time">💬</div>
+                    </div>
+                `;
+            }
+        });
+        
+        usersHtml += '</div>';
+        
+        onlineUsersDiv.innerHTML = searchHtml + '<div class="users-title">Личные чаты</div>' + usersHtml;
+    });
+    
+    onValue(groupsRef, (snapshot) => {
+        const groups = snapshot.val() || {};
+        const onlineUsersDiv = document.getElementById('onlineUsers');
+        let groupsHtml = '<div class="users-title" style="margin-top: 20px;">Группы</div>';
+        
+        Object.entries(groups).forEach(([groupId, group]) => {
+            if (group.members && group.members.includes(window.currentUser.id)) {
+                groupsHtml += `
+                    <div class="user-item" onclick="openGroupChat('${groupId}', '${group.name}')">
+                        <div class="user-item-avatar" style="background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);">
+                            ${group.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div class="user-item-name">${group.name}</div>
+                        <div class="user-item-time">👥 ${group.members.length}</div>
+                    </div>
+                `;
+            }
+        });
+        
+        const existingGroups = document.querySelector('#groupsList');
+        if (existingGroups) {
+            existingGroups.remove();
+        }
+        
+        const groupsDiv = document.createElement('div');
+        groupsDiv.id = 'groupsList';
+        groupsDiv.innerHTML = groupsHtml;
+        onlineUsersDiv.appendChild(groupsDiv);
+    });
+};
 
-                Object.entries(users).forEach(([userId, user]) => {
-                    if (user.online) {
-                        count++;
-                        const userEl = document.createElement('div');
-                        userEl.className = 'user-item';
-                        userEl.onclick = () => openProfile(userId);
-                        
-                        let avatarHtml;
-                        if (user.avatarImage) {
-                            avatarHtml = `<div class="user-item-avatar"><img src="${user.avatarImage}" alt=""><span class="user-online-indicator"></span></div>`;
-                        } else {
-                            avatarHtml = `<div class="user-item-avatar avatar-gradient-${user.avatar || 1}">${user.name.charAt(0).toUpperCase()}<span class="user-online-indicator"></span></div>`;
-                        }
-                        
-                        userEl.innerHTML = `
-                            ${avatarHtml}
-                            <div class="user-item-name">${user.name}${user.isDeveloper ? ' <span class="developer-badge">DEV</span>' : ''}</div>
-                            <div class="user-item-time">сейчас</div>
-                        `;
-                        onlineUsersDiv.appendChild(userEl);
-                    }
-                });
-
-                onlineCount.textContent = `${count} участников онлайн`;
-            });
-        };
+        window.filterUsers = function(searchTerm) {
+    const users = document.querySelectorAll('#usersList .user-item');
+    users.forEach(user => {
+        const username = user.dataset.username;
+        if (username && username.includes(searchTerm.toLowerCase())) {
+            user.style.display = 'flex';
+        } else {
+            user.style.display = 'none';
+        }
+    });
+};
 
         window.addMessageToDOM = function(message) {
     const container = document.getElementById('messagesContainer');
@@ -1717,7 +1797,193 @@
     container.appendChild(messageEl);
 };
 
+window.openPrivateChat = async function(userId, userName) {
+    const chatId = [window.currentUser.id, userId].sort().join('_');
+    window.currentRoom = `private_${chatId}`;
+    window.currentChatType = 'private';
+    window.currentChatUser = { id: userId, name: userName };
+    
+    const chatHeader = document.querySelector('.chat-room-info');
+    chatHeader.innerHTML = `
+        <h3>${userName}</h3>
+        <span>Личный чат</span>
+    `;
+    
+    document.querySelector('.chat-room-icon').innerHTML = '💬';
+    loadMessages();
+    
+    if (window.innerWidth <= 768) {
+        document.getElementById('sidebar').classList.remove('open');
+    }
+};
+
+window.openGroupChat = function(groupId, groupName) {
+    window.currentRoom = `group_${groupId}`;
+    window.currentChatType = 'group';
+    window.currentGroupId = groupId;
+    
+    const chatHeader = document.querySelector('.chat-room-info');
+    chatHeader.innerHTML = `
+        <h3>${groupName}</h3>
+        <span>Группа</span>
+    `;
+    
+    document.querySelector('.chat-room-icon').innerHTML = '👥';
+    document.querySelector('.chat-title').onclick = () => openGroupInfo(groupId);
+    loadMessages();
+    
+    if (window.innerWidth <= 768) {
+        document.getElementById('sidebar').classList.remove('open');
+    }
+};
+
+window.showCreateGroup = async function() {
+    const groupsRef = ref(database, 'groups');
+    const snapshot = await get(groupsRef);
+    const groups = snapshot.val() || {};
+    
+    const userGroups = Object.values(groups).filter(group => 
+        group.creator === window.currentUser.id
+    );
+    
+    if (userGroups.length >= 1) {
+        alert('Вы можете создать только одну группу!');
+        return;
+    }
+    
+    const groupName = prompt('Введите название группы:');
+    if (!groupName) return;
+    
+    const groupId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    const newGroup = {
+        id: groupId,
+        name: groupName,
+        creator: window.currentUser.id,
+        members: [window.currentUser.id],
+        createdAt: Date.now()
+    };
+    
+    await set(ref(database, `groups/${groupId}`), newGroup);
+    openGroupChat(groupId, groupName);
+};
+
+window.openGroupInfo = async function(groupId) {
+    if (!groupId && window.currentChatType === 'group') {
+        groupId = window.currentGroupId;
+    }
+    
+    if (!groupId) return;
+    
+    const modal = document.getElementById('groupInfoModal');
+    const membersList = document.getElementById('groupMembersList');
+    const membersCount = document.getElementById('groupMembersCount');
+    
+    const groupRef = ref(database, `groups/${groupId}`);
+    const groupSnapshot = await get(groupRef);
+    const group = groupSnapshot.val();
+    
+    if (!group) return;
+    
+    document.querySelector('.group-name').textContent = group.name;
+    
+    const usersRef = ref(database, 'users');
+    const usersSnapshot = await get(usersRef);
+    const users = usersSnapshot.val() || {};
+    
+    membersList.innerHTML = '';
+    let count = 0;
+    
+    group.members.forEach(memberId => {
+        const user = users[memberId];
+        if (user) {
+            count++;
+            const memberEl = document.createElement('div');
+            memberEl.className = 'member-item';
+            
+            let avatarHtml;
+            if (user.avatarImage) {
+                avatarHtml = `<div class="member-avatar"><img src="${user.avatarImage}" alt=""></div>`;
+            } else {
+                avatarHtml = `<div class="member-avatar avatar-gradient-${user.avatar || 1}">${user.name.charAt(0).toUpperCase()}</div>`;
+            }
+            
+            const isCreator = group.creator === memberId;
+            const canKick = (group.creator === window.currentUser.id || window.isDeveloper) && memberId !== window.currentUser.id;
+            const kickBtn = canKick ? `<button class="btn-kick" onclick="kickFromGroup('${groupId}', '${memberId}')">Исключить</button>` : '';
+            
+            memberEl.innerHTML = `
+                ${avatarHtml}
+                <div class="member-info">
+                    <div class="member-name">${user.name}${isCreator ? ' 👑' : ''}${user.isDeveloper ? ' <span class="developer-badge">DEV</span>' : ''}</div>
+                    <div class="member-status">${user.online ? 'В сети' : 'Не в сети'}</div>
+                </div>
+                ${kickBtn}
+            `;
+            membersList.appendChild(memberEl);
+        }
+    });
+    
+    const addMemberBtn = document.createElement('button');
+    addMemberBtn.className = 'btn-profile btn-save';
+    addMemberBtn.textContent = 'Добавить участника';
+    addMemberBtn.style.marginTop = '20px';
+    addMemberBtn.onclick = () => addMemberToGroup(groupId);
+    
+    if (group.creator === window.currentUser.id || window.isDeveloper) {
+        membersList.appendChild(addMemberBtn);
+    }
+    
+    membersCount.textContent = `${count} участников`;
+    modal.classList.add('show');
+};
+
+window.addMemberToGroup = async function(groupId) {
+    const usersRef = ref(database, 'users');
+    const usersSnapshot = await get(usersRef);
+    const users = usersSnapshot.val() || {};
+    
+    const groupRef = ref(database, `groups/${groupId}`);
+    const groupSnapshot = await get(groupRef);
+    const group = groupSnapshot.val();
+    
+    const availableUsers = Object.entries(users)
+        .filter(([userId, user]) => !group.members.includes(userId) && user.online)
+        .map(([userId, user]) => `${user.name} (ID: ${userId})`);
+    
+    if (availableUsers.length === 0) {
+        alert('Нет доступных пользователей для добавления');
+        return;
+    }
+    
+    const selectedUser = prompt('Выберите пользователя:\n' + availableUsers.join('\n'));
+    if (!selectedUser) return;
+    
+    const userId = selectedUser.match(/ID: (.+)KATEX_INLINE_CLOSE/)?.[1];
+    if (!userId) return;
+    
+    group.members.push(userId);
+    await set(groupRef, group);
+    openGroupInfo(groupId);
+};
+
+window.kickFromGroup = async function(groupId, userId) {
+    if (confirm('Исключить этого пользователя из группы?')) {
+        const groupRef = ref(database, `groups/${groupId}`);
+        const snapshot = await get(groupRef);
+        const group = snapshot.val();
+        
+        group.members = group.members.filter(id => id !== userId);
+        await set(groupRef, group);
+        openGroupInfo(groupId);
+    }
+};
+        
         window.sendMessage = async function() {
+    if (!window.currentRoom) {
+        alert('Выберите чат для отправки сообщения');
+        return;
+    }
+    
     if (isSending) return;
     
     const input = document.getElementById('messageInput');
