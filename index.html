@@ -1107,6 +1107,117 @@
         display: none;
     }
 
+        .sidebar-header {
+    padding: 20px;
+    background: var(--bg-main);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.back-to-chat {
+    display: none;
+    width: 100%;
+    padding: 12px;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.back-to-chat:hover {
+    background: var(--primary-dark);
+    transform: translateY(-2px);
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px;
+    background: var(--bg-chat);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    overflow: hidden;
+}
+
+.user-details {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.user-name {
+    font-weight: 600;
+    margin-bottom: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.message-input-container {
+    padding: 15px;
+    background: var(--bg-secondary);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.message-input-wrapper {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+}
+
+.media-upload-btn {
+    width: 50px;
+    height: 50px;
+    background: var(--bg-chat);
+    border: 2px solid var(--border);
+    border-radius: 15px;
+    font-size: 26px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.media-upload-btn:hover {
+    background: var(--primary);
+    border-color: var(--primary);
+    transform: scale(1.1);
+}
+
+.media-upload-btn input {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+@media (max-width: 768px) {
+    .back-to-chat {
+        display: block;
+    }
+    
+    .sidebar-header {
+        padding: 15px;
+    }
+    
+    .user-name {
+        max-width: 150px;
+    }
+}
+
         .media-btn {
     width: 45px;
     height: 45px;
@@ -1233,7 +1344,7 @@
                 </div>
                 <div class="user-info" onclick="openProfile('current')">
 
-<                button class="back-to-chat" onclick="toggleSidebar()">← Вернуться к чату</button>
+<                 <button class="back-to-chat" onclick="toggleSidebar()">← Вернуться к чату</button>
                     
                     <div class="user-avatar" id="currentUserAvatar">
                         <span id="currentUserAvatarText">U</span>
@@ -1278,33 +1389,33 @@
             </div>
 
             <div class="message-input-container">
-                <label class="media-btn">
-                📎
-                <input type="file" class="media-upload" id="mediaUpload" accept="image/*,video/*" onchange="uploadMedia(event)">
-            </label>
-                <div class="reply-container" id="replyContainer">
-                <div class="reply-header">
-                    <div>
-                        <div class="reply-to">Ответ для <span id="replyToName"></span></div>
-                        <div class="reply-text" id="replyText"></div>
-                    </div>
-                    <button class="btn-close-reply" onclick="cancelReply()">×</button>
-                </div>
+    <div class="reply-container" id="replyContainer">
+        <div class="reply-header">
+            <div>
+                <div class="reply-to">Ответ для <span id="replyToName"></span></div>
+                <div class="reply-text" id="replyText"></div>
             </div>
-                <div class="message-input-wrapper">
-                    <div class="input-group">
-                        <textarea 
-                            class="message-input" 
-                            id="messageInput" 
-                            placeholder="Введите сообщение..."
-                            rows="1"
-                        ></textarea>
-                    </div>
-                    <button class="send-btn" id="sendBtn" onclick="sendMessage()">
-                        <span>➤</span>
-                    </button>
-                </div>
-            </div>
+            <button class="btn-close-reply" onclick="cancelReply()">×</button>
+        </div>
+    </div>
+    <div class="message-input-wrapper">
+        <label class="media-upload-btn">
+            📎
+            <input type="file" accept="image/*,video/*" onchange="uploadMedia(event)">
+        </label>
+        <div class="input-group">
+            <textarea 
+                class="message-input" 
+                id="messageInput" 
+                placeholder="Введите сообщение..."
+                rows="1"
+            ></textarea>
+        </div>
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+            <span>➤</span>
+        </button>
+    </div>
+</div>
         </main>
     </div>
 
@@ -1627,9 +1738,24 @@
        window.initChat = function() {
     loadOnlineUsers();
     setupEventListeners();
+    showUsersList();
     
     if (window.isDeveloper) {
         document.getElementById('clearChatDevBtn').style.display = 'flex';
+    }
+};
+
+window.clearAllChats = async function() {
+    if (!window.isDeveloper) return;
+    
+    if (!window.currentRoom) {
+        alert('Выберите чат для очистки');
+        return;
+    }
+    
+    if (confirm('Вы уверены, что хотите очистить этот чат?')) {
+        const messagesRef = ref(database, `messages/${window.currentRoom}`);
+        await remove(messagesRef);
     }
 };
 
@@ -1838,33 +1964,40 @@ window.openGroupChat = function(groupId, groupName) {
 };
 
 window.showCreateGroup = async function() {
-    const groupsRef = ref(database, 'groups');
-    const snapshot = await get(groupsRef);
-    const groups = snapshot.val() || {};
-    
-    const userGroups = Object.values(groups).filter(group => 
-        group.creator === window.currentUser.id
-    );
-    
-    if (userGroups.length >= 1) {
-        alert('Вы можете создать только одну группу!');
-        return;
+    try {
+        const groupsRef = ref(database, 'groups');
+        const snapshot = await get(groupsRef);
+        const groups = snapshot.val() || {};
+        
+        const userGroups = Object.values(groups).filter(group => 
+            group && group.creator === window.currentUser.id
+        );
+        
+        if (userGroups.length >= 1) {
+            alert('Вы можете создать только одну группу!');
+            return;
+        }
+        
+        const groupName = prompt('Введите название группы:');
+        if (!groupName || !groupName.trim()) return;
+        
+        const groupId = 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        const newGroup = {
+            id: groupId,
+            name: groupName.trim(),
+            creator: window.currentUser.id,
+            members: [window.currentUser.id],
+            createdAt: Date.now()
+        };
+        
+        const groupRef = ref(database, 'groups/' + groupId);
+        await set(groupRef, newGroup);
+        
+        openGroupChat(groupId, groupName);
+    } catch (error) {
+        console.error('Error creating group:', error);
+        alert('Ошибка при создании группы. Попробуйте еще раз.');
     }
-    
-    const groupName = prompt('Введите название группы:');
-    if (!groupName) return;
-    
-    const groupId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-    const newGroup = {
-        id: groupId,
-        name: groupName,
-        creator: window.currentUser.id,
-        members: [window.currentUser.id],
-        createdAt: Date.now()
-    };
-    
-    await set(ref(database, `groups/${groupId}`), newGroup);
-    openGroupChat(groupId, groupName);
 };
 
 window.openGroupInfo = async function(groupId) {
