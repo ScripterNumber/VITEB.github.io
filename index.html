@@ -1097,6 +1097,78 @@
         opacity: 0.7;
         transition: all 0.3s ease;
     }
+        .message-image {
+    max-width: 100%;
+    width: auto;
+    height: auto;
+    max-height: 300px;
+    border-radius: 12px;
+    cursor: pointer;
+    margin-top: 8px;
+    display: block;
+}
+
+@media (max-width: 768px) {
+    .message-image {
+        max-width: calc(100vw - 120px);
+        max-height: 250px;
+    }
+    
+    .message.own .message-image {
+        max-width: calc(100vw - 100px);
+    }
+}
+
+.image-viewer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.95);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 2000;
+    padding: 20px;
+}
+
+.image-viewer.show {
+    display: flex;
+}
+
+.image-viewer-content {
+    max-width: 90vw;
+    max-height: 90vh;
+    position: relative;
+}
+
+.image-viewer img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.image-viewer-close {
+    position: absolute;
+    top: -40px;
+    right: 0;
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    font-size: 24px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.image-viewer-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
     
     .media-btn:hover {
         opacity: 1;
@@ -1271,6 +1343,13 @@
             <div class="login-error" id="loginError">Это имя уже занято!</div>
             <button class="btn-login" onclick="login()">Войти в чат</button>
         </div>
+    </div>
+
+    <div class="image-viewer" id="imageViewer" onclick="closeImageViewer(event)">
+    <div class="image-viewer-content" onclick="event.stopPropagation()">
+        <button class="image-viewer-close" onclick="closeImageViewer()">×</button>
+        <img id="viewerImage" src="" alt="">
+    </div>
     </div>
 
     <div class="profile-modal" id="profileModal">
@@ -1870,14 +1949,14 @@ window.clearAllChats = async function() {
     });
 };
 
-        window.addMessageToDOM = function(message) {
+window.addMessageToDOM = function(message) {
     const container = document.getElementById('messagesContainer');
     
     const messageEl = document.createElement('div');
     const isOwn = message.userId === window.currentUser?.id;
     messageEl.className = `message ${isOwn ? 'own' : ''}`;
     messageEl.dataset.messageId = message.timestamp;
-    messageEl.dataset.messageText = message.text;
+    messageEl.dataset.messageText = message.text || '';
     messageEl.dataset.userName = message.userName;
     
     const time = new Date(message.timestamp).toLocaleTimeString('ru-RU', { 
@@ -1904,7 +1983,7 @@ window.clearAllChats = async function() {
 
     let mediaHtml = '';
     if (message.mediaUrl) {
-        mediaHtml = `<img src="${message.mediaUrl}" class="message-image" onclick="window.open('${message.mediaUrl}', '_blank')">`;
+        mediaHtml = `<img src="${message.mediaUrl}" class="message-image" onclick="openImageViewer('${message.mediaUrl}')">`;
     }
 
     messageEl.innerHTML = `
@@ -1922,6 +2001,8 @@ window.clearAllChats = async function() {
     
     container.appendChild(messageEl);
 };
+
+        
 
 window.openPrivateChat = async function(userId, userName) {
     const chatId = [window.currentUser.id, userId].sort().join('_');
@@ -1965,23 +2046,10 @@ window.openGroupChat = function(groupId, groupName) {
 
 window.showCreateGroup = async function() {
     try {
-        const groupsRef = ref(database, 'groups');
-        const snapshot = await get(groupsRef);
-        const groups = snapshot.val() || {};
-        
-        const userGroups = Object.values(groups).filter(group => 
-            group && group.creator === window.currentUser.id
-        );
-        
-        if (userGroups.length >= 1) {
-            alert('Вы можете создать только одну группу!');
-            return;
-        }
-        
         const groupName = prompt('Введите название группы:');
         if (!groupName || !groupName.trim()) return;
         
-        const groupId = 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        const groupId = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9);
         const newGroup = {
             id: groupId,
             name: groupName.trim(),
@@ -1991,12 +2059,31 @@ window.showCreateGroup = async function() {
         };
         
         const groupRef = ref(database, 'groups/' + groupId);
-        await set(groupRef, newGroup);
+        await push(groupRef, newGroup);
         
         openGroupChat(groupId, groupName);
     } catch (error) {
         console.error('Error creating group:', error);
-        alert('Ошибка при создании группы. Попробуйте еще раз.');
+        const groupName = prompt('Введите название группы:');
+        if (!groupName || !groupName.trim()) return;
+        
+        const groupId = Date.now().toString();
+        window.currentRoom = 'group_' + groupId;
+        window.currentChatType = 'group';
+        window.currentGroupId = groupId;
+        
+        const chatHeader = document.querySelector('.chat-room-info');
+        chatHeader.innerHTML = `
+            <h3>${groupName}</h3>
+            <span>Группа</span>
+        `;
+        
+        document.querySelector('.chat-room-icon').innerHTML = '👥';
+        loadMessages();
+        
+        if (window.innerWidth <= 768) {
+            document.getElementById('sidebar').classList.remove('open');
+        }
     }
 };
 
@@ -2154,15 +2241,61 @@ window.kickFromGroup = async function(groupId, userId) {
         input.value = '';
         input.style.height = 'auto';
         
-        setTimeout(() => {
-            input.focus();
-        }, 50);
+        if (window.innerWidth > 768) {
+            setTimeout(() => {
+                input.focus();
+            }, 50);
+        } else {
+            input.blur();
+        }
     } finally {
         isSending = false;
         sendBtn.disabled = false;
     }
 };
 
+window.setupEventListeners = function() {
+    const messageInput = document.getElementById('messageInput');
+    
+    messageInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
+
+    messageInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+    });
+
+    messageInput.addEventListener('focus', function() {
+        if (window.innerWidth <= 768) {
+            setTimeout(() => {
+                const container = document.getElementById('messagesContainer');
+                container.scrollTop = container.scrollHeight;
+            }, 300);
+        }
+    });
+
+    document.getElementById('loginInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            login();
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        const sidebar = document.getElementById('sidebar');
+        const menuToggle = document.querySelector('.menu-toggle');
+        
+        if (window.innerWidth <= 768 && 
+            sidebar.classList.contains('open') && 
+            !sidebar.contains(e.target) && 
+            !menuToggle.contains(e.target)) {
+            sidebar.classList.remove('open');
+        }
+    });
+};
         let currentReply = null;
 let selectedMessage = null;
 
@@ -2208,6 +2341,22 @@ window.openGroupInfo = async function() {
     
     membersCount.textContent = `${count} участников`;
     modal.classList.add('show');
+};
+
+window.openImageViewer = function(imageUrl) {
+    const viewer = document.getElementById('imageViewer');
+    const img = document.getElementById('viewerImage');
+    img.src = imageUrl;
+    viewer.classList.add('show');
+    document.body.style.overflow = 'hidden';
+};
+
+window.closeImageViewer = function(event) {
+    if (!event || event.target === document.getElementById('imageViewer')) {
+        const viewer = document.getElementById('imageViewer');
+        viewer.classList.remove('show');
+        document.body.style.overflow = '';
+    }
 };
 
 window.closeGroupInfo = function() {
