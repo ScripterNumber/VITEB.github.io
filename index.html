@@ -1598,30 +1598,33 @@
             loadOnlineUsers();
             setupEventListeners();
             
+            if (window.isDeveloper) {
+                document.getElementById('clearChatDevBtn').style.display = 'flex';
+            }
         };
 
        window.loadMessages = function() {
-            const messagesRef = ref(database, `messages/${window.currentRoom}`);
-            
-            if (window.messagesListener) {
-                off(messagesRef);
-            }
+    const messagesRef = ref(database, `messages/${window.currentRoom}`);
+    
+    if (window.messagesListener) {
+        off(messagesRef);
+    }
+
+    const container = document.getElementById('messagesContainer');
+    
+    onValue(messagesRef, (snapshot) => {
+        const messages = snapshot.val() || {};
+        container.innerHTML = '';
         
-            const container = document.getElementById('messagesContainer');
-            
-            onValue(messagesRef, (snapshot) => {
-                const messages = snapshot.val() || {};
-                container.innerHTML = '';
-                
-                Object.values(messages).forEach(message => {
-                    if (message) {
-                        addMessageToDOM(message);
-                    }
-                });
-                
-                container.scrollTop = container.scrollHeight;
-            });
-        };
+        Object.values(messages).forEach(message => {
+            if (message) {
+                addMessageToDOM(message);
+            }
+        });
+        
+        container.scrollTop = container.scrollHeight;
+    });
+};
 
         window.loadOnlineUsers = function() {
             const usersRef = ref(database, 'users');
@@ -1662,104 +1665,241 @@
         };
 
         window.addMessageToDOM = function(message) {
-            const container = document.getElementById('messagesContainer');
-            
-            const messageEl = document.createElement('div');
-            const isOwn = message.userId === window.currentUser?.id;
-            messageEl.className = `message ${isOwn ? 'own' : ''}`;
-            messageEl.dataset.messageId = message.timestamp;
-            messageEl.dataset.messageText = message.text;
-            messageEl.dataset.userName = message.userName;
-            
-            const time = new Date(message.timestamp).toLocaleTimeString('ru-RU', { 
-                hour: '2-digit', 
-                minute: '2-digit' 
-            });
-        
-            let avatarHtml;
-            if (message.userAvatarImage) {
-                avatarHtml = `<div class="message-avatar" onclick="openProfile('${message.userId}')"><img src="${message.userAvatarImage}" alt=""></div>`;
-            } else {
-                avatarHtml = `<div class="message-avatar avatar-gradient-${message.userAvatar || 1}" onclick="openProfile('${message.userId}')">${message.userName.charAt(0).toUpperCase()}</div>`;
-            }
-        
-            let replyHtml = '';
-            if (message.replyTo) {
-                replyHtml = `
-                    <div class="message-reply">
-                        <div class="message-reply-author">${message.replyTo.author}</div>
-                        <div class="message-reply-text">${message.replyTo.text}</div>
-                    </div>
-                `;
-            }
-        
-            let mediaHtml = '';
-            if (message.mediaUrl) {
-                mediaHtml = `<img src="${message.mediaUrl}" class="message-image" onclick="window.open('${message.mediaUrl}', '_blank')">`;
-            }
-        
-            messageEl.innerHTML = `
-                ${avatarHtml}
-                <div class="message-content" oncontextmenu="showMessageMenu(event, this)" onclick="handleMessageClick(event, this)">
-                    ${!isOwn ? `<div class="message-author">${message.userName}${message.isDeveloper ? ' <span class="developer-badge">DEV</span>' : ''}</div>` : ''}
-                    <div class="message-bubble">
-                        ${replyHtml}
-                        ${message.text ? `<div class="message-text">${escapeHtml(message.text)}</div>` : ''}
-                        ${mediaHtml}
-                        <div class="message-time">${time}</div>
-                    </div>
-                </div>
-            `;
-            
-            container.appendChild(messageEl);
-        };
+    const container = document.getElementById('messagesContainer');
+    
+    const messageEl = document.createElement('div');
+    const isOwn = message.userId === window.currentUser?.id;
+    messageEl.className = `message ${isOwn ? 'own' : ''}`;
+    messageEl.dataset.messageId = message.timestamp;
+    messageEl.dataset.messageText = message.text;
+    messageEl.dataset.userName = message.userName;
+    
+    const time = new Date(message.timestamp).toLocaleTimeString('ru-RU', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+    });
+
+    let avatarHtml;
+    if (message.userAvatarImage) {
+        avatarHtml = `<div class="message-avatar" onclick="openProfile('${message.userId}')"><img src="${message.userAvatarImage}" alt=""></div>`;
+    } else {
+        avatarHtml = `<div class="message-avatar avatar-gradient-${message.userAvatar || 1}" onclick="openProfile('${message.userId}')">${message.userName.charAt(0).toUpperCase()}</div>`;
+    }
+
+    let replyHtml = '';
+    if (message.replyTo) {
+        replyHtml = `
+            <div class="message-reply">
+                <div class="message-reply-author">${message.replyTo.author}</div>
+                <div class="message-reply-text">${message.replyTo.text}</div>
+            </div>
+        `;
+    }
+
+    let mediaHtml = '';
+    if (message.mediaUrl) {
+        mediaHtml = `<img src="${message.mediaUrl}" class="message-image" onclick="window.open('${message.mediaUrl}', '_blank')">`;
+    }
+
+    messageEl.innerHTML = `
+        ${avatarHtml}
+        <div class="message-content" oncontextmenu="showMessageMenu(event, this)" onclick="handleMessageClick(event, this)">
+            ${!isOwn ? `<div class="message-author">${message.userName}${message.isDeveloper ? ' <span class="developer-badge">DEV</span>' : ''}</div>` : ''}
+            <div class="message-bubble">
+                ${replyHtml}
+                ${message.text ? `<div class="message-text">${escapeHtml(message.text)}</div>` : ''}
+                ${mediaHtml}
+                <div class="message-time">${time}</div>
+            </div>
+        </div>
+    `;
+    
+    container.appendChild(messageEl);
+};
 
         window.sendMessage = async function() {
-        if (isSending) return;
-        
-        const input = document.getElementById('messageInput');
-        const sendBtn = document.getElementById('sendBtn');
-        const text = input.value.trim();
-        
-        if (!text || !window.currentUser) return;
+    if (isSending) return;
     
-        isSending = true;
-        sendBtn.disabled = true;
+    const input = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const text = input.value.trim();
     
+    if (!text || !window.currentUser) return;
+
+    isSending = true;
+    sendBtn.disabled = true;
+
+    const message = {
+        userId: window.currentUser.id,
+        userName: window.currentUser.name,
+        userAvatar: window.currentUser.avatar || 1,
+        userAvatarImage: window.currentUser.avatarImage || null,
+        isDeveloper: window.currentUser.isDeveloper || false,
+        text: text,
+        timestamp: Date.now(),
+        room: window.currentRoom
+    };
+
+    if (currentReply) {
+        message.replyTo = {
+            author: currentReply.author,
+            text: currentReply.text
+        };
+        cancelReply();
+    }
+
+    try {
+        const messagesRef = ref(database, `messages/${window.currentRoom}`);
+        await push(messagesRef, message);
+
+        input.value = '';
+        input.style.height = 'auto';
+        
+        setTimeout(() => {
+            input.focus();
+        }, 50);
+    } finally {
+        isSending = false;
+        sendBtn.disabled = false;
+    }
+};
+
+        let currentReply = null;
+let selectedMessage = null;
+
+window.openGroupInfo = async function() {
+    const modal = document.getElementById('groupInfoModal');
+    const membersList = document.getElementById('groupMembersList');
+    const membersCount = document.getElementById('groupMembersCount');
+    
+    const usersRef = ref(database, 'users');
+    const snapshot = await get(usersRef);
+    const users = snapshot.val() || {};
+    
+    membersList.innerHTML = '';
+    let count = 0;
+    
+    Object.entries(users).forEach(([userId, user]) => {
+        if (user.online) {
+            count++;
+            const memberEl = document.createElement('div');
+            memberEl.className = 'member-item';
+            
+            let avatarHtml;
+            if (user.avatarImage) {
+                avatarHtml = `<div class="member-avatar"><img src="${user.avatarImage}" alt=""></div>`;
+            } else {
+                avatarHtml = `<div class="member-avatar avatar-gradient-${user.avatar || 1}">${user.name.charAt(0).toUpperCase()}</div>`;
+            }
+            
+            const kickBtn = window.isDeveloper && userId !== window.currentUser.id ? 
+                `<button class="btn-kick" onclick="kickUser('${userId}')">Исключить</button>` : '';
+            
+            memberEl.innerHTML = `
+                ${avatarHtml}
+                <div class="member-info">
+                    <div class="member-name">${user.name}${user.isDeveloper ? ' <span class="developer-badge">DEV</span>' : ''}</div>
+                    <div class="member-status">В сети</div>
+                </div>
+                ${kickBtn}
+            `;
+            membersList.appendChild(memberEl);
+        }
+    });
+    
+    membersCount.textContent = `${count} участников`;
+    modal.classList.add('show');
+};
+
+window.closeGroupInfo = function() {
+    document.getElementById('groupInfoModal').classList.remove('show');
+};
+
+window.kickUser = async function(userId) {
+    if (!window.isDeveloper) return;
+    
+    if (confirm('Исключить этого пользователя?')) {
+        const userRef = ref(database, `users/${userId}`);
+        await remove(userRef);
+        closeGroupInfo();
+    }
+};
+
+window.showMessageMenu = function(event, element) {
+    event.preventDefault();
+    const menu = document.getElementById('messageMenu');
+    const message = element.closest('.message');
+    selectedMessage = {
+        text: message.dataset.messageText,
+        author: message.dataset.userName,
+        timestamp: message.dataset.messageId
+    };
+    
+    menu.style.left = event.pageX + 'px';
+    menu.style.top = event.pageY + 'px';
+    menu.classList.add('show');
+    
+    document.addEventListener('click', hideMessageMenu);
+};
+
+window.handleMessageClick = function(event, element) {
+    if ('ontouchstart' in window) {
+        event.preventDefault();
+        showMessageMenu(event, element);
+    }
+};
+
+window.hideMessageMenu = function() {
+    document.getElementById('messageMenu').classList.remove('show');
+    document.removeEventListener('click', hideMessageMenu);
+};
+
+window.copyMessage = function() {
+    if (selectedMessage) {
+        navigator.clipboard.writeText(selectedMessage.text);
+        hideMessageMenu();
+    }
+};
+
+window.replyToMessage = function() {
+    if (selectedMessage) {
+        currentReply = selectedMessage;
+        document.getElementById('replyToName').textContent = selectedMessage.author;
+        document.getElementById('replyText').textContent = selectedMessage.text;
+        document.getElementById('replyContainer').classList.add('show');
+        document.getElementById('messageInput').focus();
+        hideMessageMenu();
+    }
+};
+
+window.cancelReply = function() {
+    currentReply = null;
+    document.getElementById('replyContainer').classList.remove('show');
+};
+
+window.uploadMedia = async function(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async function(e) {
         const message = {
             userId: window.currentUser.id,
             userName: window.currentUser.name,
             userAvatar: window.currentUser.avatar || 1,
             userAvatarImage: window.currentUser.avatarImage || null,
             isDeveloper: window.currentUser.isDeveloper || false,
-            text: text,
+            text: '',
+            mediaUrl: e.target.result,
             timestamp: Date.now(),
             room: window.currentRoom
         };
-    
-        if (currentReply) {
-            message.replyTo = {
-                author: currentReply.author,
-                text: currentReply.text
-            };
-            cancelReply();
-        }
-    
-        try {
-            const messagesRef = ref(database, `messages/${window.currentRoom}`);
-            await push(messagesRef, message);
-    
-            input.value = '';
-            input.style.height = 'auto';
-            
-            setTimeout(() => {
-                input.focus();
-            }, 50);
-        } finally {
-            isSending = false;
-            sendBtn.disabled = false;
-        }
+
+        const messagesRef = ref(database, `messages/${window.currentRoom}`);
+        await push(messagesRef, message);
     };
+    reader.readAsDataURL(file);
+};
 
         window.logout = function() {
             if (window.currentUser) {
@@ -1792,43 +1932,41 @@
         };
 
         window.setupEventListeners = function() {
-            document.getElementById('messageInput').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                }
-            });
+    document.getElementById('messageInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            sendMessage();
+        }
+    });
 
-            
+    document.getElementById('messageInput').addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+    });
 
-            document.getElementById('messageInput').addEventListener('input', function() {
-                this.style.height = 'auto';
-                this.style.height = Math.min(this.scrollHeight, 100) + 'px';
-            });
+    document.getElementById('loginInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            login();
+        }
+    });
 
-            document.getElementById('loginInput').addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    login();
-                }
-            });
+    document.addEventListener('click', (e) => {
+        const sidebar = document.getElementById('sidebar');
+        const menuToggle = document.querySelector('.menu-toggle');
+        
+        if (window.innerWidth <= 768 && 
+            sidebar.classList.contains('open') && 
+            !sidebar.contains(e.target) && 
+            !menuToggle.contains(e.target)) {
+            sidebar.classList.remove('open');
+        }
+    });
 
-            document.addEventListener('click', (e) => {
-                const sidebar = document.getElementById('sidebar');
-                const menuToggle = document.querySelector('.menu-toggle');
-                
-                if (window.innerWidth <= 768 && 
-                    sidebar.classList.contains('open') && 
-                    !sidebar.contains(e.target) && 
-                    !menuToggle.contains(e.target)) {
-                    sidebar.classList.remove('open');
-                }
-            });
-
-            document.addEventListener('contextmenu', (e) => {
-                e.preventDefault();
-                return false;
-            });
-        };
+    document.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        return false;
+    });
+};
 
         window.escapeHtml = function(text) {
             const map = {
