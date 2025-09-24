@@ -1824,10 +1824,6 @@
     if (window.isDeveloper) {
         document.getElementById('clearChatDevBtn').style.display = 'flex';
     }
-    
-    setInterval(() => {
-        loadChats();
-    }, 5000);
 };
 
 window.clearAllChats = async function() {
@@ -1855,72 +1851,46 @@ window.clearAllChats = async function() {
     }
 
     const container = document.getElementById('messagesContainer');
-    let existingMessages = {};
     
-    onValue(messagesRef, (snapshot) => {
+    window.messagesListener = onValue(messagesRef, (snapshot) => {
         const messages = snapshot.val() || {};
-        const newMessages = {};
+        const messagesArray = Object.values(messages);
         
-        Object.entries(messages).forEach(([key, message]) => {
-            if (!existingMessages[key]) {
-                newMessages[key] = message;
+        container.innerHTML = '';
+        
+        messagesArray.sort((a, b) => a.timestamp - b.timestamp);
+        
+        messagesArray.forEach(message => {
+            if (message) {
+                addMessageToDOM(message);
             }
         });
         
-        if (Object.keys(existingMessages).length === 0) {
-            container.innerHTML = '';
-            Object.values(messages).forEach(message => {
-                if (message) {
-                    addMessageToDOM(message);
-                }
-            });
-        } else {
-            Object.values(newMessages).forEach(message => {
-                if (message) {
-                    addMessageToDOM(message);
-                }
-            });
-        }
-        
-        existingMessages = messages;
         container.scrollTop = container.scrollHeight;
     });
 };
 
 window.loadChats = async function() {
-    const chatsRef = ref(database, 'userChats/' + window.currentUser.id);
-    const chatsSnapshot = await get(chatsRef);
-    const userChats = chatsSnapshot.val() || {};
-    
-    const usersRef = ref(database, 'users');
-    const usersSnapshot = await get(usersRef);
-    const users = usersSnapshot.val() || {};
-    
-    const onlineUsersDiv = document.getElementById('onlineUsers');
-    
-    let searchHtml = `
-        <div style="padding: 10px;">
-            <input type="text" id="searchUser" placeholder="Поиск чатов..." 
-                style="width: 100%; padding: 10px; background: var(--bg-chat); border: 1px solid var(--border); 
-                border-radius: 8px; color: var(--text-primary);" 
-                oninput="filterChats(this.value)">
-        </div>
-    `;
-    
-    let chatsHtml = '<div id="chatsList">';
-    
-    for (const [chatId, chatData] of Object.entries(userChats)) {
-        if (chatId.startsWith('private_')) {
-            const otherUserId = chatData.userId;
-            const user = users[otherUserId];
-            
-            if (user) {
-                const lastMessageTime = chatData.lastMessage ? 
-                    new Date(chatData.lastMessage.timestamp).toLocaleTimeString('ru-RU', { 
-                        hour: '2-digit', 
-                        minute: '2-digit' 
-                    }) : '';
-                
+    try {
+        const usersRef = ref(database, 'users');
+        const usersSnapshot = await get(usersRef);
+        const users = usersSnapshot.val() || {};
+        
+        const onlineUsersDiv = document.getElementById('onlineUsers');
+        
+        let searchHtml = `
+            <div style="padding: 10px;">
+                <input type="text" id="searchUser" placeholder="Поиск пользователей..." 
+                    style="width: 100%; padding: 10px; background: var(--bg-chat); border: 1px solid var(--border); 
+                    border-radius: 8px; color: var(--text-primary);" 
+                    oninput="filterChats(this.value)">
+            </div>
+        `;
+        
+        let chatsHtml = '<div id="chatsList">';
+        
+        Object.entries(users).forEach(([userId, user]) => {
+            if (userId !== window.currentUser.id) {
                 let avatarHtml;
                 if (user.avatarImage) {
                     avatarHtml = `<div class="user-item-avatar"><img src="${user.avatarImage}" alt="">${user.online ? '<span class="user-online-indicator"></span>' : ''}</div>`;
@@ -1928,52 +1898,27 @@ window.loadChats = async function() {
                     avatarHtml = `<div class="user-item-avatar avatar-gradient-${user.avatar || 1}">${user.name.charAt(0).toUpperCase()}${user.online ? '<span class="user-online-indicator"></span>' : ''}</div>`;
                 }
                 
-                chatsHtml += `
-                    <div class="user-item" data-username="${user.name.toLowerCase()}" onclick="openPrivateChat('${otherUserId}', '${user.name}')">
-                        ${avatarHtml}
-                        <div class="user-item-name">
-                            ${user.name}${user.isDeveloper ? ' <span class="developer-badge">DEV</span>' : ''}
-                            <div style="font-size: 11px; color: var(--text-secondary);">
-                                ${user.online ? 'В сети' : lastMessageTime}
-                            </div>
-                        </div>
-                        ${chatData.unread ? '<div style="background: var(--primary); color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 11px;">' + chatData.unread + '</div>' : ''}
-                    </div>
-                `;
-            }
-        }
-    }
-    
-    Object.entries(users).forEach(([userId, user]) => {
-        if (user.online && userId !== window.currentUser.id) {
-            const chatId = [window.currentUser.id, userId].sort().join('_');
-            const chatExists = userChats[`private_${chatId}`];
-            
-            if (!chatExists) {
-                let avatarHtml;
-                if (user.avatarImage) {
-                    avatarHtml = `<div class="user-item-avatar"><img src="${user.avatarImage}" alt=""><span class="user-online-indicator"></span></div>`;
-                } else {
-                    avatarHtml = `<div class="user-item-avatar avatar-gradient-${user.avatar || 1}">${user.name.charAt(0).toUpperCase()}<span class="user-online-indicator"></span></div>`;
-                }
+                const statusText = user.online ? 'В сети' : 'Не в сети';
                 
                 chatsHtml += `
                     <div class="user-item" data-username="${user.name.toLowerCase()}" onclick="openPrivateChat('${userId}', '${user.name}')">
                         ${avatarHtml}
                         <div class="user-item-name">
                             ${user.name}${user.isDeveloper ? ' <span class="developer-badge">DEV</span>' : ''}
-                            <div style="font-size: 11px; color: var(--text-secondary);">В сети</div>
+                            <div style="font-size: 11px; color: var(--text-secondary);">${statusText}</div>
                         </div>
                     </div>
                 `;
             }
-        }
-    });
-    
-    chatsHtml += '</div>';
-    onlineUsersDiv.innerHTML = searchHtml + '<div class="users-title">Чаты</div>' + chatsHtml;
-    
-    loadGroups();
+        });
+        
+        chatsHtml += '</div>';
+        onlineUsersDiv.innerHTML = searchHtml + '<div class="users-title">Чаты</div>' + chatsHtml;
+        
+        loadGroups();
+    } catch (error) {
+        console.error('Error loading chats:', error);
+    }
 };
 
 window.loadChats = async function() {
@@ -2139,6 +2084,33 @@ window.loadChats = async function() {
     });
 };
 
+        window.loadGroups = async function() {
+    try {
+        const onlineUsersDiv = document.getElementById('onlineUsers');
+        let groupsHtml = '<div class="users-title" style="margin-top: 20px;">Группы</div>';
+        
+        groupsHtml += `
+            <div class="user-item" onclick="showCreateGroup()" style="background: var(--bg-chat);">
+                <div class="user-item-avatar" style="background: var(--primary);">
+                    +
+                </div>
+                <div class="user-item-name">Создать группу</div>
+            </div>
+        `;
+        
+        const existingGroups = document.querySelector('#groupsList');
+        if (existingGroups) {
+            existingGroups.remove();
+        }
+        
+        const groupsDiv = document.createElement('div');
+        groupsDiv.id = 'groupsList';
+        groupsDiv.innerHTML = groupsHtml;
+        onlineUsersDiv.appendChild(groupsDiv);
+    } catch (error) {
+        console.error('Error loading groups:', error);
+    }
+};
         
 window.filterChats = function(searchTerm) {
     const chats = document.querySelectorAll('#chatsList .user-item');
@@ -2235,18 +2207,6 @@ window.openPrivateChat = async function(userId, userName) {
     document.querySelector('.chat-room-icon').innerHTML = '💬';
     document.querySelector('.chat-title').onclick = () => openProfile(userId);
     
-    await set(ref(database, 'userChats/' + window.currentUser.id + '/private_' + chatId), {
-        userId: userId,
-        userName: userName,
-        lastAccess: Date.now()
-    });
-    
-    await set(ref(database, 'userChats/' + userId + '/private_' + chatId), {
-        userId: window.currentUser.id,
-        userName: window.currentUser.name,
-        lastAccess: Date.now()
-    });
-    
     loadMessages();
     
     if (window.innerWidth <= 768) {
@@ -2275,34 +2235,24 @@ window.openGroupChat = function(groupId, groupName) {
 };
 
 window.showCreateGroup = async function() {
-    try {
-        const groupsRef = ref(database, 'userGroups/' + window.currentUser.id);
-        const snapshot = await get(groupsRef);
-        const userGroups = snapshot.val() || {};
-        
-        if (Object.keys(userGroups).length >= 1) {
-            alert('Вы можете создать только одну группу!');
-            return;
-        }
-        
-        const groupName = prompt('Введите название группы:');
-        if (!groupName || !groupName.trim()) return;
-        
-        const groupId = Date.now().toString();
-        const newGroup = {
-            id: groupId,
-            name: groupName.trim(),
-            creator: window.currentUser.id,
-            members: [window.currentUser.id],
-            createdAt: Date.now()
-        };
-        
-        await set(ref(database, 'groups/' + groupId), newGroup);
-        await set(ref(database, 'userGroups/' + window.currentUser.id + '/' + groupId), true);
-        
-        openGroupChat(groupId, groupName);
-    } catch (error) {
-        console.error('Error creating group:', error);
+    const groupName = prompt('Введите название группы:');
+    if (!groupName || !groupName.trim()) return;
+    
+    const groupId = 'group_' + Date.now();
+    window.currentRoom = groupId;
+    window.currentChatType = 'group';
+    
+    const chatHeader = document.querySelector('.chat-room-info');
+    chatHeader.innerHTML = `
+        <h3>${groupName}</h3>
+        <span>Группа</span>
+    `;
+    
+    document.querySelector('.chat-room-icon').innerHTML = '👥';
+    loadMessages();
+    
+    if (window.innerWidth <= 768) {
+        document.getElementById('sidebar').classList.remove('open');
     }
 };
 
@@ -2423,7 +2373,7 @@ window.kickFromGroup = async function(groupId, userId) {
         return;
     }
     
-    if (isSending) return;
+    if (window.isSending) return;
     
     const input = document.getElementById('messageInput');
     const sendBtn = document.getElementById('sendBtn');
@@ -2431,7 +2381,7 @@ window.kickFromGroup = async function(groupId, userId) {
     
     if (!text || !window.currentUser) return;
 
-    isSending = true;
+    window.isSending = true;
     sendBtn.disabled = true;
 
     const message = {
@@ -2445,43 +2395,27 @@ window.kickFromGroup = async function(groupId, userId) {
         room: window.currentRoom
     };
 
-    if (currentReply) {
+    if (window.currentReply) {
         message.replyTo = {
-            author: currentReply.author,
-            text: currentReply.text
+            author: window.currentReply.author,
+            text: window.currentReply.text
         };
-        cancelReply();
+        window.cancelReply();
     }
 
     try {
         const messagesRef = ref(database, `messages/${window.currentRoom}`);
         await push(messagesRef, message);
-        
-        if (window.currentChatType === 'private' && window.currentChatUser) {
-            const chatId = [window.currentUser.id, window.currentChatUser.id].sort().join('_');
-            
-            await set(ref(database, 'userChats/' + window.currentUser.id + '/private_' + chatId + '/lastMessage'), {
-                text: text,
-                timestamp: Date.now()
-            });
-            
-            await set(ref(database, 'userChats/' + window.currentChatUser.id + '/private_' + chatId + '/lastMessage'), {
-                text: text,
-                timestamp: Date.now()
-            });
-        }
 
         input.value = '';
         input.style.height = 'auto';
         
-        setTimeout(() => {
-            if (window.innerWidth > 768) {
-                input.focus();
-            }
-        }, 100);
+        if (window.innerWidth <= 768) {
+            input.blur();
+        }
         
     } finally {
-        isSending = false;
+        window.isSending = false;
         sendBtn.disabled = false;
     }
 };
@@ -2499,15 +2433,6 @@ window.setupEventListeners = function() {
     messageInput.addEventListener('input', function() {
         this.style.height = 'auto';
         this.style.height = Math.min(this.scrollHeight, 100) + 'px';
-    });
-
-    messageInput.addEventListener('focus', function() {
-        if (window.innerWidth <= 768) {
-            setTimeout(() => {
-                const container = document.getElementById('messagesContainer');
-                container.scrollTop = container.scrollHeight;
-            }, 300);
-        }
     });
 
     document.getElementById('loginInput').addEventListener('keypress', (e) => {
