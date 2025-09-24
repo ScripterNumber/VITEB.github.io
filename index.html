@@ -869,11 +869,10 @@
                 <div class="avatar-option avatar-gradient-5" data-gradient="5" onclick="selectAvatar(5)">E</div>
             </div>
 
-            <div class="profile-actions">
-                <button class="btn-profile btn-save" id="saveProfileBtn" onclick="saveProfile()" style="display: none;">Сохранить</button>
-                <button class="btn-profile btn-clear-chat" id="clearChatBtn" onclick="clearAllChats()" style="display: none;">Очистить чат</button>
-                <button class="btn-profile btn-cancel" onclick="closeProfile()">Закрыть</button>
-            </div>
+           <div class="profile-actions">
+    <button class="btn-profile btn-save" id="saveProfileBtn" onclick="saveProfile()" style="display: none;">Сохранить</button>
+    <button class="btn-profile btn-cancel" onclick="closeProfile()">Закрыть</button>
+</div>
         </div>
     </div>
 
@@ -915,9 +914,10 @@
                     </div>
                 </div>
                 <div class="chat-actions">
-                    <button class="btn-icon" onclick="shareRoom()">🔗</button>
-                    <button class="btn-icon btn-logout" onclick="logout()">🚪</button>
-                </div>
+    <button class="btn-icon" id="clearChatDevBtn" onclick="clearAllChats()" style="display: none;" title="Очистить чат">🗑️</button>
+    <button class="btn-icon" onclick="shareRoom()">🔗</button>
+    <button class="btn-icon btn-logout" onclick="logout()">🚪</button>
+</div>
             </header>
 
             <div class="messages-container" id="messagesContainer">
@@ -1068,74 +1068,71 @@
         };
 
         window.openProfile = async function(userId) {
-            const modal = document.getElementById('profileModal');
-            const isOwnProfile = userId === 'current' || userId === window.currentUser?.id;
-            const clearBtn = document.getElementById('clearChatBtn');
-            const uploadLabel = document.getElementById('uploadLabel');
-            const devBadge = document.getElementById('devBadge');
+    const modal = document.getElementById('profileModal');
+    const isOwnProfile = userId === 'current' || userId === window.currentUser?.id;
+    const uploadLabel = document.getElementById('uploadLabel');
+    const devBadge = document.getElementById('devBadge');
+    
+    if (isOwnProfile) {
+        document.getElementById('profileName').textContent = window.currentUser.name;
+        const avatar = document.getElementById('profileAvatar');
+        const avatarText = document.getElementById('profileAvatarText');
+        
+        if (window.currentUser.avatarImage) {
+            avatar.innerHTML = `<img src="${window.currentUser.avatarImage}" alt="">`;
+            avatar.className = 'profile-avatar-large';
+        } else {
+            avatar.innerHTML = `<span id="profileAvatarText">${window.currentUser.name.charAt(0).toUpperCase()}</span>`;
+            avatar.className = `profile-avatar-large avatar-gradient-${window.currentUser.avatar || 1}`;
+        }
+        
+        document.getElementById('profileStatus').textContent = 'В сети';
+        document.getElementById('saveProfileBtn').style.display = 'none';
+        document.getElementById('avatarSelector').classList.remove('show');
+        viewingUserId = window.currentUser.id;
+        editingUserId = window.currentUser.id;
+        
+        uploadLabel.style.display = 'block';
+        devBadge.style.display = window.isDeveloper ? 'inline-block' : 'none';
+    } else {
+        const userRef = ref(database, `users/${userId}`);
+        const snapshot = await get(userRef);
+        const user = snapshot.val();
+        
+        if (user) {
+            document.getElementById('profileName').textContent = user.name;
+            const avatar = document.getElementById('profileAvatar');
             
-            if (isOwnProfile) {
-                document.getElementById('profileName').textContent = window.currentUser.name;
-                const avatar = document.getElementById('profileAvatar');
-                const avatarText = document.getElementById('profileAvatarText');
-                
-                if (window.currentUser.avatarImage) {
-                    avatar.innerHTML = `<img src="${window.currentUser.avatarImage}" alt="">`;
-                    avatar.className = 'profile-avatar-large';
-                } else {
-                    avatar.innerHTML = `<span id="profileAvatarText">${window.currentUser.name.charAt(0).toUpperCase()}</span>`;
-                    avatar.className = `profile-avatar-large avatar-gradient-${window.currentUser.avatar || 1}`;
-                }
-                
-                document.getElementById('profileStatus').textContent = 'В сети';
-                document.getElementById('saveProfileBtn').style.display = 'none';
-                document.getElementById('avatarSelector').classList.remove('show');
-                viewingUserId = window.currentUser.id;
-                editingUserId = window.currentUser.id;
-                
-                clearBtn.style.display = window.isDeveloper ? 'block' : 'none';
-                uploadLabel.style.display = 'block';
-                devBadge.style.display = window.isDeveloper ? 'inline-block' : 'none';
+            if (user.avatarImage) {
+                avatar.innerHTML = `<img src="${user.avatarImage}" alt="">`;
+                avatar.className = 'profile-avatar-large';
             } else {
-                const userRef = ref(database, `users/${userId}`);
-                const snapshot = await get(userRef);
-                const user = snapshot.val();
-                
-                if (user) {
-                    document.getElementById('profileName').textContent = user.name;
-                    const avatar = document.getElementById('profileAvatar');
-                    
-                    if (user.avatarImage) {
-                        avatar.innerHTML = `<img src="${user.avatarImage}" alt="">`;
-                        avatar.className = 'profile-avatar-large';
-                    } else {
-                        avatar.innerHTML = `<span id="profileAvatarText">${user.name.charAt(0).toUpperCase()}</span>`;
-                        avatar.className = `profile-avatar-large avatar-gradient-${user.avatar || 1}`;
-                    }
-                    
-                    document.getElementById('profileStatus').textContent = user.online ? 'В сети' : 'Не в сети';
-                    document.getElementById('saveProfileBtn').style.display = 'none';
-                    document.getElementById('avatarSelector').classList.remove('show');
-                    
-                    clearBtn.style.display = 'none';
-                    uploadLabel.style.display = window.isDeveloper ? 'block' : 'none';
-                    devBadge.style.display = user.isDeveloper ? 'inline-block' : 'none';
-                    
-                    if (window.isDeveloper) {
-                        avatar.onclick = () => toggleAvatarSelector();
-                        editingUserId = userId;
-                    } else {
-                        avatar.onclick = null;
-                    }
-                }
+                avatar.innerHTML = `<span id="profileAvatarText">${user.name.charAt(0).toUpperCase()}</span>`;
+                avatar.className = `profile-avatar-large avatar-gradient-${user.avatar || 1}`;
             }
             
-            modal.classList.add('show');
+            document.getElementById('profileStatus').textContent = user.online ? 'В сети' : 'Не в сети';
+            document.getElementById('saveProfileBtn').style.display = 'none';
+            document.getElementById('avatarSelector').classList.remove('show');
             
-            if (window.innerWidth <= 768) {
-                document.getElementById('sidebar').classList.remove('open');
+            uploadLabel.style.display = window.isDeveloper ? 'block' : 'none';
+            devBadge.style.display = user.isDeveloper ? 'inline-block' : 'none';
+            
+            if (window.isDeveloper) {
+                avatar.onclick = () => toggleAvatarSelector();
+                editingUserId = userId;
+            } else {
+                avatar.onclick = null;
             }
-        };
+        }
+    }
+    
+    modal.classList.add('show');
+    
+    if (window.innerWidth <= 768) {
+        document.getElementById('sidebar').classList.remove('open');
+    }
+};
 
         window.toggleAvatarSelector = function() {
             if (editingUserId === window.currentUser?.id || window.isDeveloper) {
@@ -1199,43 +1196,43 @@
         };
 
         window.saveProfile = async function() {
-            const targetUser = editingUserId === window.currentUser.id ? window.currentUser : null;
-            
-            if (targetUser) {
-                targetUser.avatar = selectedAvatar;
-                targetUser.avatarImage = selectedAvatarImage;
-                
-                const userRef = ref(database, `users/${targetUser.id}`);
-                await set(userRef, {
-                    name: targetUser.name,
-                    avatar: selectedAvatar,
-                    avatarImage: selectedAvatarImage,
-                    online: true,
-                    isDeveloper: targetUser.isDeveloper,
-                    lastSeen: serverTimestamp()
-                });
-                
-                localStorage.setItem('waveUser', JSON.stringify(targetUser));
-                updateUserUI();
-            } else if (window.isDeveloper && editingUserId) {
-                const userRef = ref(database, `users/${editingUserId}`);
-                const snapshot = await get(userRef);
-                const user = snapshot.val();
-                
-                if (user) {
-                    await set(userRef, {
-                        name: user.name,
-                        avatar: selectedAvatar,
-                        avatarImage: selectedAvatarImage,
-                        online: user.online,
-                        isDeveloper: user.isDeveloper || false,
-                        lastSeen: user.lastSeen
-                    });
-                }
-            }
-            
-            closeProfile();
-        };
+    const targetUser = editingUserId === window.currentUser.id ? window.currentUser : null;
+    
+    if (targetUser) {
+        targetUser.avatar = selectedAvatar;
+        targetUser.avatarImage = selectedAvatarImage;
+        
+        const userRef = ref(database, `users/${targetUser.id}`);
+        await set(userRef, {
+            name: targetUser.name,
+            avatar: selectedAvatar,
+            avatarImage: selectedAvatarImage,
+            online: true,
+            isDeveloper: targetUser.isDeveloper || false,
+            lastSeen: serverTimestamp()
+        });
+        
+        localStorage.setItem('waveUser', JSON.stringify(targetUser));
+        updateUserUI();
+    } else if (window.isDeveloper && editingUserId) {
+        const userRef = ref(database, `users/${editingUserId}`);
+        const snapshot = await get(userRef);
+        const user = snapshot.val();
+        
+        if (user) {
+            await set(userRef, {
+                name: user.name,
+                avatar: selectedAvatar,
+                avatarImage: selectedAvatarImage,
+                online: user.online,
+                isDeveloper: user.isDeveloper || false,
+                lastSeen: user.lastSeen
+            });
+        }
+    }
+    
+    closeProfile();
+};
 
         window.clearAllChats = async function() {
             if (!window.isDeveloper) return;
@@ -1460,25 +1457,29 @@
 
         const savedUser = localStorage.getItem('waveUser');
         if (savedUser) {
-            window.currentUser = JSON.parse(savedUser);
-            window.isDeveloper = window.currentUser.isDeveloper || false;
-            document.getElementById('loginModal').classList.add('hidden');
-            updateUserUI();
-            
-            const userRef = ref(database, `users/${window.currentUser.id}`);
-            set(userRef, {
-                name: window.currentUser.name,
-                avatar: window.currentUser.avatar || 1,
-                avatarImage: window.currentUser.avatarImage || null,
-                online: true,
-                isDeveloper: window.isDeveloper,
-                lastSeen: serverTimestamp()
-            });
-            
-            onDisconnect(userRef).remove();
-            
-            initChat();
-        }
+    window.currentUser = JSON.parse(savedUser);
+    window.isDeveloper = window.currentUser.isDeveloper || false;
+    document.getElementById('loginModal').classList.add('hidden');
+    updateUserUI();
+    
+    if (window.isDeveloper) {
+        document.getElementById('clearChatDevBtn').style.display = 'flex';
+    }
+    
+    const userRef = ref(database, `users/${window.currentUser.id}`);
+    set(userRef, {
+        name: window.currentUser.name,
+        avatar: window.currentUser.avatar || 1,
+        avatarImage: window.currentUser.avatarImage || null,
+        online: true,
+        isDeveloper: window.currentUser.isDeveloper || false,
+        lastSeen: serverTimestamp()
+    });
+    
+    onDisconnect(userRef).remove();
+    
+    initChat();
+}
     </script>
 </body>
 </html>
