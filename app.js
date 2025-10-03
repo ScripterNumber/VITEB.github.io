@@ -45,13 +45,22 @@ document.addEventListener('DOMContentLoaded', () => {
     setupMobileNav();
     setupChatContextMenu();
 
-     window.addEventListener('resize', () => {
-        if (window.innerWidth > 768) {
-            document.getElementById('sidebar').classList.remove('hidden');
-            document.getElementById('chatArea').classList.remove('active');
-            document.getElementById('mobileNav').style.display = 'none';
-        }
-    });
+    handleViewportChange();
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('orientationchange', handleViewportChange);
+
+    if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', handleViewportChange);
+    }
+    
+    //  window.addEventListener('resize', () => {
+    //     if (window.innerWidth > 768) {
+    //         document.getElementById('sidebar').classList.remove('hidden');
+    //         document.getElementById('chatArea').classList.remove('active');
+    //         document.getElementById('mobileNav').style.display = 'none';
+    //     }
+    // });
+    
 });
 
 function checkExistingUser() {
@@ -156,6 +165,13 @@ function setupEventListeners() {
         document.getElementById('sidebar').classList.remove('hidden');
         document.getElementById('chatArea').classList.remove('active');
         
+        // Скрываем элементы чата
+        document.getElementById('chatHeader').style.display = 'none';
+        document.getElementById('messagesContainer').style.display = 'none';
+        document.getElementById('messageInputContainer').style.display = 'none';
+        document.getElementById('welcomeScreen').style.display = 'flex';
+        
+        // Показываем навигацию если есть чаты
         const checkChats = async () => {
             const chatsRef = ref(database, `userChats/${currentUser.id}`);
             const snapshot = await get(chatsRef);
@@ -184,6 +200,13 @@ function setupEventListeners() {
     document.getElementById('closeImageViewerBtn').addEventListener('click', closeImageViewer);
 
     document.addEventListener('click', hideMessageMenu);
+}
+
+function handleViewportChange() {
+    if (window.innerWidth <= 768) {
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
+    }
 }
 
 function setupMobileNav() {
@@ -619,15 +642,35 @@ async function loadChats() {
     });
 }
 
+// 1. Добавляем улучшенные стили для мобильных устройств
 function addMobileStyles() {
     const style = document.createElement('style');
-    style.textContent = `
 
+    const additionalStyle = document.createElement('style');
+        additionalStyle.textContent = `
+            @media (max-width: 768px) {
+                #app {
+                    height: calc(var(--vh, 1vh) * 100);
+                }
+                
+                #chatArea.active {
+                    height: calc(var(--vh, 1vh) * 100);
+                }
+            }
+        `;
+        document.head.appendChild(additionalStyle);
+    style.textContent = `
+        /* Фиксим позиционирование для мобильных */
         @media (max-width: 768px) {
             #app {
                 height: 100vh;
-                height: 100dvh; 
+                height: 100dvh;
                 overflow: hidden;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
             }
             
             #sidebar {
@@ -635,7 +678,7 @@ function addMobileStyles() {
                 top: 0;
                 left: 0;
                 right: 0;
-                bottom: 60px; 
+                bottom: 40px; /* Уменьшаем высоту нижней навигации */
                 z-index: 100;
             }
             
@@ -647,39 +690,80 @@ function addMobileStyles() {
                 bottom: 0;
                 display: flex;
                 flex-direction: column;
+                height: 100vh;
+                height: 100dvh;
+            }
+            
+            #chatHeader {
+                flex-shrink: 0;
+                height: 60px;
             }
             
             #messagesContainer {
                 flex: 1;
                 overflow-y: auto;
                 padding-bottom: 10px;
-
-                padding-bottom: env(safe-area-inset-bottom, 10px);
+                min-height: 0; /* Важно для flex */
             }
             
+            /* ВАЖНО: фиксим контейнер ввода сообщений */
             #messageInputContainer {
-                position: sticky;
-                bottom: 0;
+                position: relative;
                 background: var(--bg-primary);
                 border-top: 1px solid var(--border-color);
-                padding: 10px;
-                padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-                z-index: 10;
+                padding: 12px;
+                padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+                z-index: 100;
+                flex-shrink: 0;
+                display: block !important; /* Принудительно показываем */
             }
             
+            /* Увеличиваем поле ввода */
+            #messageInput {
+                width: 100%;
+                min-height: 42px !important; /* Увеличиваем минимальную высоту */
+                max-height: 120px;
+                font-size: 16px !important; /* Предотвращаем зум на iOS */
+                padding: 10px 12px !important;
+                box-sizing: border-box;
+                resize: none;
+                -webkit-appearance: none;
+                border-radius: 20px;
+            }
+            
+            .message-input-wrapper {
+                display: flex;
+                gap: 8px;
+                align-items: flex-end;
+                width: 100%;
+            }
+            
+            /* Увеличиваем кнопки */
+            #sendBtn, .input-btn {
+                width: 42px !important;
+                height: 42px !important;
+                min-width: 42px !important;
+                font-size: 20px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border-radius: 50%;
+                flex-shrink: 0;
+            }
+            
+            /* Уменьшаем нижнюю навигацию */
             #mobileNav {
                 position: fixed;
                 bottom: 0;
                 left: 0;
                 right: 0;
-                height: 60px;
+                height: 40px; /* Уменьшаем с 60px до 40px */
                 background: var(--bg-primary);
                 border-top: 1px solid var(--border-color);
-                display: none; 
+                display: none;
                 align-items: center;
                 justify-content: space-around;
                 z-index: 1000;
-
                 padding-bottom: env(safe-area-inset-bottom, 0px);
             }
             
@@ -687,41 +771,74 @@ function addMobileStyles() {
                 display: flex;
             }
             
-
-            #chatArea.active ~ #mobileNav {
-                display: none;
-            }
-            
-
-            #chatArea.active #messagesContainer {
-                height: calc(100vh - 120px - env(safe-area-inset-bottom, 0px));
-                height: calc(100dvh - 120px - env(safe-area-inset-bottom, 0px));
-            }
-            
-
-            #messageInput {
-                width: 100%;
-                max-width: 100%;
-                box-sizing: border-box;
-            }
-            
-            .message-input-wrapper {
+            /* Уменьшаем элементы навигации */
+            .nav-item {
+                font-size: 10px !important; /* Очень маленький текст */
+                padding: 4px 8px;
                 display: flex;
-                gap: 10px;
-                align-items: flex-end;
-                width: 100%;
+                flex-direction: column;
+                align-items: center;
+                gap: 2px;
             }
             
-
-            .profile-modal {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                max-height: 100vh;
-                max-height: 100dvh;
-                overflow-y: auto;
+            .nav-item i {
+                font-size: 16px !important; /* Маленькие иконки */
+            }
+            
+            /* Когда чат открыт, скрываем навигацию */
+            #chatArea.active ~ #mobileNav {
+                display: none !important;
+            }
+            
+            /* Убираем welcomeScreen на мобильных когда чат активен */
+            #chatArea.active #welcomeScreen {
+                display: none !important;
+            }
+            
+            /* Показываем элементы чата когда активен */
+            #chatArea.active #chatHeader {
+                display: flex !important;
+            }
+            
+            #chatArea.active #messagesContainer {
+                display: flex !important;
+            }
+            
+            #chatArea.active #messageInputContainer {
+                display: block !important;
+            }
+            
+            /* Фиксим высоту при открытой клавиатуре */
+            #chatArea.active {
+                height: 100%;
+            }
+            
+            /* Дополнительные стили для лучшей работы */
+            .chat-item {
+                padding: 12px;
+            }
+            
+            .search-container {
+                padding: 10px;
+            }
+            
+            #searchInput {
+                font-size: 16px; /* Предотвращаем зум */
+            }
+        }
+        
+        /* Специальные стили для очень маленьких экранов */
+        @media (max-width: 380px) {
+            #mobileNav {
+                height: 35px;
+            }
+            
+            .nav-item {
+                font-size: 9px !important;
+            }
+            
+            .nav-item i {
+                font-size: 14px !important;
             }
         }
     `;
@@ -843,10 +960,23 @@ async function openChat(userId, userData) {
     existingMessages.clear();
     document.getElementById('messagesContainer').innerHTML = '';
     
-    document.getElementById('welcomeScreen').style.display = 'none';
-    document.getElementById('chatHeader').style.display = 'flex';
-    document.getElementById('messagesContainer').style.display = 'flex';
-    document.getElementById('messageInputContainer').style.display = 'block';
+    // Для мобильных устройств
+    if (window.innerWidth <= 768) {
+        document.getElementById('sidebar').classList.add('hidden');
+        document.getElementById('chatArea').classList.add('active');
+        document.getElementById('mobileNav').style.display = 'none';
+        
+        // Принудительно показываем элементы чата
+        document.getElementById('welcomeScreen').style.display = 'none';
+        document.getElementById('chatHeader').style.display = 'flex';
+        document.getElementById('messagesContainer').style.display = 'flex';
+        document.getElementById('messageInputContainer').style.display = 'block';
+    } else {
+        document.getElementById('welcomeScreen').style.display = 'none';
+        document.getElementById('chatHeader').style.display = 'flex';
+        document.getElementById('messagesContainer').style.display = 'flex';
+        document.getElementById('messageInputContainer').style.display = 'block';
+    }
     
     const chatAvatar = document.getElementById('chatUserAvatar');
     if (userData.avatarImage) {
@@ -869,20 +999,20 @@ async function openChat(userId, userData) {
     });
     
     await markAsRead(userId);
-    
     loadMessages(userId);
     
     document.querySelectorAll('.chat-item').forEach(item => item.classList.remove('active'));
     
 
     if (window.innerWidth <= 768) {
-        document.getElementById('sidebar').classList.add('hidden');
-        document.getElementById('chatArea').classList.add('active');
-        document.getElementById('mobileNav').style.display = 'none';
-
         setTimeout(() => {
-            document.getElementById('messageInput').focus();
-        }, 100);
+            const input = document.getElementById('messageInput');
+            if (input) {
+                input.focus();
+
+                scrollToBottom();
+            }
+        }, 300);
     }
 }
 
@@ -1051,6 +1181,12 @@ async function sendMessage() {
         
         input.value = '';
         input.style.height = 'auto';
+
+         if (window.innerWidth <= 768) {
+            setTimeout(() => {
+                input.focus();
+            }, 10);
+        }
         
     } catch (error) {
         console.error('Error sending message:', error);
