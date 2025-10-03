@@ -598,29 +598,69 @@ async function sendMessage() {
         
         await push(messagesRef, messageData);
         
-        // Создаем или обновляем чат для обоих пользователей
-        const userChatRef = ref(database, `userChats/${currentUser.id}/${currentChatUser.id}`);
-        await set(userChatRef, {
+        // Используем set вместо update для создания/обновления чата
+        const userChatData = {
             lastMessage: text,
             lastMessageTime: Date.now(),
             unread: 0
-        });
+        };
         
-        const otherUserChatRef = ref(database, `userChats/${currentChatUser.id}/${currentUser.id}`);
-        const otherChatSnapshot = await get(otherUserChatRef);
-        const otherChatData = otherChatSnapshot.val() || {};
-        
-        await set(otherUserChatRef, {
+        const otherUserChatData = {
             lastMessage: text,
             lastMessageTime: Date.now(),
-            unread: (otherChatData.unread || 0) + 1
-        });
+            unread: 1
+        };
+        
+        // Сначала получаем текущее количество непрочитанных
+        const otherUserChatRef = ref(database, `userChats/${currentChatUser.id}/${currentUser.id}`);
+        try {
+            const snapshot = await get(otherUserChatRef);
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                otherUserChatData.unread = (data.unread || 0) + 1;
+            }
+        } catch (e) {
+            // Если чата еще нет, unread остается 1
+        }
+        
+        // Записываем данные
+        const userChatRef = ref(database, `userChats/${currentUser.id}/${currentChatUser.id}`);
+        await set(userChatRef, userChatData);
+        await set(otherUserChatRef, otherUserChatData);
         
         input.value = '';
         input.style.height = 'auto';
     } catch (error) {
         console.error('Error sending message:', error);
-        alert('Ошибка отправки сообщения. Попробуйте еще раз.');
+        
+        // Если ошибка связана с правами, пробуем альтернативный метод
+        if (error.message && error.message.includes('PERMISSION_DENIED')) {
+            try {
+                // Пробуем записать сообщение напрямую
+                const chatId = getChatId(currentUser.id, currentChatUser.id);
+                const messageKey = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                const messageRef = ref(database, `messages/${chatId}/${messageKey}`);
+                
+                await set(messageRef, {
+                    userId: currentUser.id,
+                    userName: currentUser.name,
+                    userAvatarGradient: currentUser.avatar,
+                    userAvatar: currentUser.avatarImage || null,
+                    text: text,
+                    timestamp: Date.now(),
+                    isDeveloper: currentUser.isDeveloper || false,
+                    replyTo: currentReply || null
+                });
+                
+                if (currentReply) cancelReply();
+                input.value = '';
+                input.style.height = 'auto';
+            } catch (retryError) {
+                alert('Ошибка отправки сообщения. Проверьте подключение к интернету.');
+            }
+        } else {
+            alert('Ошибка отправки сообщения. Попробуйте еще раз.');
+        }
     }
 }
 
@@ -696,22 +736,38 @@ async function handleMediaUpload(event) {
 }
 
 async function updateLastMessage(text) {
-    const userChatRef = ref(database, `userChats/${currentUser.id}/${currentChatUser.id}`);
-    await set(userChatRef, {
-        lastMessage: text,
-        lastMessageTime: Date.now(),
-        unread: 0
-    });
-    
-    const otherUserChatRef = ref(database, `userChats/${currentChatUser.id}/${currentUser.id}`);
-    const otherChatSnapshot = await get(otherUserChatRef);
-    const otherChatData = otherChatSnapshot.val() || {};
-    
-    await set(otherUserChatRef, {
-        lastMessage: text,
-        lastMessageTime: Date.now(),
-        unread: (otherChatData.unread || 0) + 1
-    });
+    try {
+        const userChatData = {
+            lastMessage: text,
+            lastMessageTime: Date.now(),
+            unread: 0
+        };
+        
+        const otherUserChatData = {
+            lastMessage: text,
+            lastMessageTime: Date.now(),
+            unread: 1
+        };
+        
+
+        const otherUserChatRef = ref(database, `userChats/${currentChatUser.id}/${currentUser.id}`);
+        try {
+            const snapshot = await get(otherUserChatRef);
+            if (snapshot.exists()) {
+                const data = snapshot.val();
+                otherUserChatData.unread = (data.unread || 0) + 1;
+            }
+        } catch (e) {
+
+        }
+        
+        // Записываем данные
+        const userChatRef = ref(database, `userChats/${currentUser.id}/${currentChatUser.id}`);
+        await set(userChatRef, userChatData);
+        await set(otherUserChatRef, otherUserChatData);
+    } catch (error) {
+        console.error('Error updating last message:', error);
+    }
 }
 
 async function openProfile(userId) {
