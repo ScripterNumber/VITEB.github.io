@@ -46,16 +46,53 @@ function checkExistingUser() {
     if (savedUser) {
         currentUser = JSON.parse(savedUser);
         isDeveloper = currentUser.isDeveloper || false;
-        document.getElementById('loginModal').classList.add('hidden');
-        updateUserUI();
-        initApp();
+        
+        // Проверяем существует ли пользователь в базе
+        get(ref(database, `users/${currentUser.id}`)).then(snapshot => {
+            if (snapshot.exists()) {
+                document.getElementById('loginModal').classList.add('hidden');
+                updateUserUI();
+                initApp();
+            } else {
+                // Пользователь удален, очищаем localStorage
+                localStorage.removeItem('waveUser');
+                currentUser = null;
+            }
+        });
     }
 }
 
 function setupEventListeners() {
+    // Вкладки входа/регистрации
+    document.getElementById('loginTab').addEventListener('click', () => {
+        document.getElementById('loginTab').classList.add('active');
+        document.getElementById('registerTab').classList.remove('active');
+        document.getElementById('loginForm').style.display = 'block';
+        document.getElementById('registerForm').style.display = 'none';
+    });
+    
+    document.getElementById('registerTab').addEventListener('click', () => {
+        document.getElementById('registerTab').classList.add('active');
+        document.getElementById('loginTab').classList.remove('active');
+        document.getElementById('registerForm').style.display = 'block';
+        document.getElementById('loginForm').style.display = 'none';
+    });
+    
+    // Кнопки входа и регистрации
     document.getElementById('loginBtn').addEventListener('click', login);
-    document.getElementById('loginInput').addEventListener('keypress', (e) => {
+    document.getElementById('registerBtn').addEventListener('click', register);
+    
+    // Валидация username при регистрации
+    document.getElementById('registerUsername').addEventListener('input', (e) => {
+        e.target.value = e.target.value.replace(/[^a-zA-Z0-9]/g, '');
+    });
+    
+    // Enter для быстрого входа
+    document.getElementById('loginPassword').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') login();
+    });
+    document.getElementById('registerPassword').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') register();
     });
 
     document.getElementById('currentUserInfo').addEventListener('click', () => openProfile(currentUser.id));
@@ -71,6 +108,8 @@ function setupEventListeners() {
     document.getElementById('changeUsernameBtn').addEventListener('click', showUsernameChange);
     document.getElementById('saveUsernameBtn').addEventListener('click', saveUsername);
     document.getElementById('cancelUsernameBtn').addEventListener('click', hideUsernameChange);
+    document.getElementById('logoutProfileBtn').addEventListener('click', logout);
+    document.getElementById('deleteAccountBtn').addEventListener('click', deleteAccount);
 
     document.querySelectorAll('.avatar-option').forEach(option => {
         option.addEventListener('click', () => {
@@ -116,80 +155,137 @@ function setupEventListeners() {
     document.addEventListener('click', hideMessageMenu);
 }
 
-function generateUsername(name) {
-    let username = name.toLowerCase()
-        .replace(/[а-яё]/g, '') 
-        .replace(/[^a-z0-9]/g, '') 
-        .trim();
-    
-    if (!username) {
-        const translit = {
-            'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e',
-            'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
-            'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
-            'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch', 'ъ': '',
-            'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
-        };
-        
-        username = name.toLowerCase().split('').map(char => translit[char] || char).join('')
-            .replace(/[^a-z0-9]/g, '')
-            .trim();
+function hashPassword(password) {
+    // Простая хеш-функция для паролей
+    let hash = 0;
+    for (let i = 0; i < password.length; i++) {
+        const char = password.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash;
     }
-    
-    if (!username) {
-        username = 'user' + Date.now().toString().slice(-6);
-    }
-    
-    username = username + Math.floor(Math.random() * 1000);
-    
-    return username;
+    return hash.toString();
 }
 
-async function isUsernameAvailable(username, excludeUserId = null) {
-    const usersRef = ref(database, 'users');
-    const snapshot = await get(usersRef);
-    const users = snapshot.val() || {};
-    
-    return !Object.entries(users).some(([userId, userData]) => 
-        userId !== excludeUserId && 
-        userData.username && 
-        userData.username.toLowerCase() === username.toLowerCase()
-    );
+function validatePassword(password) {
+    // Проверяем наличие минимум 3 цифр
+    const digitCount = (password.match(/\d/g) || []).length;
+    return digitCount >= 3;
 }
 
 async function login() {
-    const input = document.getElementById('loginInput');
-    const name = input.value.trim();
+    const username = document.getElementById('loginUsername').value.trim();
+    const password = document.getElementById('loginPassword').value;
     const errorDiv = document.getElementById('loginError');
     
-    if (!name) {
-        errorDiv.textContent = 'Пожалуйста, введите ваше имя';
+    if (!username || !password) {
+        errorDiv.textContent = 'Заполните все поля';
         errorDiv.style.display = 'block';
         return;
     }
+    
+    try {
+        const usersRef = ref(database, 'users');
+        const snapshot = await get(usersRef);
+        const users = snapshot.val() || {};
+        
+        let userFound = null;
+        for (const [userId, userData] of Object.entries(users)) {
+            if (userData.username === username && userData.password === hashPassword(password)) {
+                userFound = { id: userId, ...userData };
+                break;
+            }
+        }
+        
+        if (!userFound) {
+            errorDiv.textContent = 'Неверный username или пароль';
+            errorDiv.style.display = 'block';
+            return;
+        }
+        
+        currentUser = userFound;
+        isDeveloper = currentUser.isDeveloper || false;
+        
+        localStorage.setItem('waveUser', JSON.stringify(currentUser));
+        
+        // Обновляем статус онлайн
+        const userRef = ref(database, `users/${currentUser.id}`);
+        await update(userRef, {
+            online: true,
+            lastSeen: serverTimestamp(),
+            ip: userIP || 'Unknown'
+        });
+        
+        onDisconnect(userRef).update({
+            online: false,
+            lastSeen: serverTimestamp()
+        });
+        
+        document.getElementById('loginModal').classList.add('hidden');
+        updateUserUI();
+        initApp();
+        
+    } catch (error) {
+        console.error('Login error:', error);
+        errorDiv.textContent = 'Ошибка входа';
+        errorDiv.style.display = 'block';
+    }
+}
 
+async function register() {
+    const name = document.getElementById('registerName').value.trim();
+    const username = document.getElementById('registerUsername').value.trim();
+    const password = document.getElementById('registerPassword').value;
+    const errorDiv = document.getElementById('registerError');
+    
+    if (!name || !username || !password) {
+        errorDiv.textContent = 'Заполните все поля';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
     if (name.length < 2) {
         errorDiv.textContent = 'Имя должно содержать минимум 2 символа';
         errorDiv.style.display = 'block';
         return;
     }
-
+    
+    if (username.length < 3) {
+        errorDiv.textContent = 'Username должен содержать минимум 3 символа';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    if (!/^[a-zA-Z0-9]+$/.test(username)) {
+        errorDiv.textContent = 'Username может содержать только английские буквы и цифры';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    if (!validatePassword(password)) {
+        errorDiv.textContent = 'Пароль должен содержать минимум 3 цифры';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
     try {
-        let username = generateUsername(name);
-        
+        // Проверяем уникальность username
         const usersRef = ref(database, 'users');
         const snapshot = await get(usersRef);
         const users = snapshot.val() || {};
         
-        let attempts = 0;
-        while (!await isUsernameAvailable(username) && attempts < 10) {
-            username = generateUsername(name) + Math.floor(Math.random() * 10000);
-            attempts++;
+        const usernameExists = Object.values(users).some(user => 
+            user.username && user.username.toLowerCase() === username.toLowerCase()
+        );
+        
+        if (usernameExists) {
+            errorDiv.textContent = 'Этот username уже занят';
+            errorDiv.style.display = 'block';
+            return;
         }
-
+        
         errorDiv.style.display = 'none';
-        isDeveloper = name === 'Developer';
-
+        isDeveloper = username === 'Developer';
+        
         const userId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         currentUser = {
             id: userId,
@@ -200,11 +296,12 @@ async function login() {
             bio: '',
             joinedAt: Date.now(),
             isDeveloper: isDeveloper,
+            password: hashPassword(password),
             blockedUsers: []
         };
-
+        
         localStorage.setItem('waveUser', JSON.stringify(currentUser));
-
+        
         const userRef = ref(database, `users/${userId}`);
         await set(userRef, {
             username: username,
@@ -216,20 +313,22 @@ async function login() {
             isDeveloper: isDeveloper,
             lastSeen: serverTimestamp(),
             ip: userIP || 'Unknown',
+            password: hashPassword(password),
             blockedUsers: {}
         });
-
+        
         onDisconnect(userRef).update({
             online: false,
             lastSeen: serverTimestamp()
         });
-
+        
         document.getElementById('loginModal').classList.add('hidden');
         updateUserUI();
         initApp();
+        
     } catch (error) {
-        console.error('Login error:', error);
-        errorDiv.textContent = 'Ошибка входа. Попробуйте еще раз.';
+        console.error('Register error:', error);
+        errorDiv.textContent = 'Ошибка регистрации';
         errorDiv.style.display = 'block';
     }
 }
@@ -267,7 +366,6 @@ async function loadBlockedUsers() {
 async function setupOnlineStatus() {
     const userRef = ref(database, `users/${currentUser.id}`);
     
-    // Обновляем IP при каждом входе
     await update(userRef, {
         online: true,
         lastSeen: serverTimestamp(),
@@ -280,7 +378,7 @@ async function setupOnlineStatus() {
             lastSeen: serverTimestamp()
         });
     });
-
+    
     setInterval(async () => {
         await update(userRef, {
             online: true,
@@ -443,7 +541,6 @@ async function openChat(userId, userData) {
     
     document.getElementById('chatUserName').innerHTML = userData.name + (userData.isDeveloper ? ' <span class="developer-badge">DEV</span>' : '');
     
-    // Обновляем статус в реальном времени
     const statusRef = ref(database, `users/${userId}`);
     onValue(statusRef, (snapshot) => {
         const user = snapshot.val();
@@ -466,7 +563,9 @@ async function openChat(userId, userData) {
 
 async function markAsRead(userId) {
     const chatRef = ref(database, `userChats/${currentUser.id}/${userId}`);
-    await update(chatRef, { unread: 0 });
+    await update(chatRef, { unread: 0 }).catch(() => {
+        // Если чата еще нет, игнорируем ошибку
+    });
 }
 
 function loadMessages(userId) {
@@ -598,7 +697,7 @@ async function sendMessage() {
         
         await push(messagesRef, messageData);
         
-        // Используем set вместо update для создания/обновления чата
+        // Создаем или обновляем чат для обоих пользователей
         const userChatData = {
             lastMessage: text,
             lastMessageTime: Date.now(),
@@ -611,7 +710,7 @@ async function sendMessage() {
             unread: 1
         };
         
-        // Сначала получаем текущее количество непрочитанных
+        // Получаем текущее количество непрочитанных
         const otherUserChatRef = ref(database, `userChats/${currentChatUser.id}/${currentUser.id}`);
         try {
             const snapshot = await get(otherUserChatRef);
@@ -632,35 +731,7 @@ async function sendMessage() {
         input.style.height = 'auto';
     } catch (error) {
         console.error('Error sending message:', error);
-        
-        // Если ошибка связана с правами, пробуем альтернативный метод
-        if (error.message && error.message.includes('PERMISSION_DENIED')) {
-            try {
-                // Пробуем записать сообщение напрямую
-                const chatId = getChatId(currentUser.id, currentChatUser.id);
-                const messageKey = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                const messageRef = ref(database, `messages/${chatId}/${messageKey}`);
-                
-                await set(messageRef, {
-                    userId: currentUser.id,
-                    userName: currentUser.name,
-                    userAvatarGradient: currentUser.avatar,
-                    userAvatar: currentUser.avatarImage || null,
-                    text: text,
-                    timestamp: Date.now(),
-                    isDeveloper: currentUser.isDeveloper || false,
-                    replyTo: currentReply || null
-                });
-                
-                if (currentReply) cancelReply();
-                input.value = '';
-                input.style.height = 'auto';
-            } catch (retryError) {
-                alert('Ошибка отправки сообщения. Проверьте подключение к интернету.');
-            }
-        } else {
-            alert('Ошибка отправки сообщения. Попробуйте еще раз.');
-        }
+        alert('Ошибка отправки сообщения. Попробуйте еще раз.');
     }
 }
 
@@ -749,7 +820,7 @@ async function updateLastMessage(text) {
             unread: 1
         };
         
-
+        // Получаем текущее количество непрочитанных
         const otherUserChatRef = ref(database, `userChats/${currentChatUser.id}/${currentUser.id}`);
         try {
             const snapshot = await get(otherUserChatRef);
@@ -758,7 +829,7 @@ async function updateLastMessage(text) {
                 otherUserChatData.unread = (data.unread || 0) + 1;
             }
         } catch (e) {
-
+            // Если чата еще нет, unread остается 1
         }
         
         // Записываем данные
@@ -850,6 +921,8 @@ async function openProfile(userId) {
         document.getElementById('changeUsernameBtn').style.display = isOwnProfile ? 'block' : 'none';
         document.getElementById('saveProfileBtn').style.display = 'none';
         document.getElementById('messageUserBtn').style.display = !isOwnProfile ? 'block' : 'none';
+        document.getElementById('logoutProfileBtn').style.display = isOwnProfile ? 'block' : 'none';
+        document.getElementById('deleteAccountBtn').style.display = isOwnProfile ? 'block' : 'none';
         
         // Кнопка блокировки
         const blockBtn = document.getElementById('blockUserBtn');
@@ -871,6 +944,25 @@ async function openProfile(userId) {
         
     } catch (error) {
         console.error('Error opening profile:', error);
+    }
+}
+
+async function deleteAccount() {
+    if (confirm('Вы уверены, что хотите удалить свой аккаунт? Это действие необратимо!')) {
+        try {
+            const userRef = ref(database, `users/${currentUser.id}`);
+            await remove(userRef);
+            
+            // Удаляем все чаты пользователя
+            const userChatsRef = ref(database, `userChats/${currentUser.id}`);
+            await remove(userChatsRef);
+            
+            localStorage.removeItem('waveUser');
+            location.reload();
+        } catch (error) {
+            console.error('Error deleting account:', error);
+            alert('Ошибка удаления аккаунта');
+        }
     }
 }
 
@@ -912,7 +1004,17 @@ async function saveUsername() {
         return;
     }
     
-    const isAvailable = await isUsernameAvailable(newUsername, currentUser.id);
+    // Проверяем доступность username
+    const usersRef = ref(database, 'users');
+    const snapshot = await get(usersRef);
+    const users = snapshot.val() || {};
+    
+    const isAvailable = !Object.entries(users).some(([userId, userData]) => 
+        userId !== currentUser.id && 
+        userData.username && 
+        userData.username.toLowerCase() === newUsername.toLowerCase()
+    );
+    
     if (!isAvailable) {
         errorDiv.textContent = 'Этот username уже занят';
         errorDiv.style.display = 'block';
