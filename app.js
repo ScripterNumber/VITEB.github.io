@@ -29,7 +29,7 @@ let contextMenuTarget = null;
 let longPressTimer = null;
 let currentView = 'chats'; // chats, search, profile
 
-// Получаем IP адрес пользователя
+
 fetch('https://api.ipify.org?format=json')
     .then(response => response.json())
     .then(data => {
@@ -52,14 +52,14 @@ function checkExistingUser() {
         currentUser = JSON.parse(savedUser);
         isDeveloper = currentUser.isDeveloper || false;
         
-        // Проверяем существует ли пользователь в базе
+
         get(ref(database, `users/${currentUser.id}`)).then(snapshot => {
             if (snapshot.exists()) {
                 document.getElementById('loginModal').classList.add('hidden');
                 updateUserUI();
                 initApp();
             } else {
-                // Пользователь удален, очищаем localStorage
+
                 localStorage.removeItem('waveUser');
                 currentUser = null;
             }
@@ -68,7 +68,7 @@ function checkExistingUser() {
 }
 
 function setupEventListeners() {
-    // Вкладки входа/регистрации
+
     document.getElementById('loginTab').addEventListener('click', () => {
         document.getElementById('loginTab').classList.add('active');
         document.getElementById('registerTab').classList.remove('active');
@@ -83,16 +83,15 @@ function setupEventListeners() {
         document.getElementById('loginForm').style.display = 'none';
     });
     
-    // Кнопки входа и регистрации
+
     document.getElementById('loginBtn').addEventListener('click', login);
     document.getElementById('registerBtn').addEventListener('click', register);
-    
-    // Валидация username при регистрации (оставляем только для username)
+
     document.getElementById('registerUsername').addEventListener('input', (e) => {
         e.target.value = e.target.value.replace(/[^a-zA-Z0-9]/g, '');
     });
     
-    // Enter для быстрого входа (оставляем как есть)
+
     document.getElementById('loginPassword').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') login();
     });
@@ -100,7 +99,7 @@ function setupEventListeners() {
         if (e.key === 'Enter') register();
     });
 
-    // Остальные обработчики остаются без изменений...
+
     document.getElementById('currentUserInfo').addEventListener('click', () => openProfile(currentUser.id));
     document.getElementById('profileAvatar').addEventListener('click', toggleAvatarSelector);
     document.getElementById('avatarUpload').addEventListener('change', uploadAvatar);
@@ -180,7 +179,7 @@ function setupMobileNav() {
 function showMobileView(view) {
     currentView = view;
     
-    // Обновляем активную кнопку навигации
+
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.remove('active');
     });
@@ -197,7 +196,7 @@ function showMobileView(view) {
 }
 
 function setupChatContextMenu() {
-    // Для десктопа - правый клик
+
     document.addEventListener('contextmenu', (e) => {
         const chatItem = e.target.closest('.chat-item');
         if (chatItem) {
@@ -206,7 +205,7 @@ function setupChatContextMenu() {
         }
     });
     
-    // Для мобильных - долгое нажатие
+
     document.addEventListener('touchstart', (e) => {
         const chatItem = e.target.closest('.chat-item');
         if (chatItem) {
@@ -225,7 +224,7 @@ function setupChatContextMenu() {
         clearTimeout(longPressTimer);
     });
     
-    // Обработчики для пунктов меню
+
     document.getElementById('deleteChatBtn').addEventListener('click', deleteChat);
     document.getElementById('viewProfileBtn').addEventListener('click', viewChatProfile);
     
@@ -241,11 +240,10 @@ function showChatContextMenu(x, y, chatItem) {
     const menu = document.getElementById('chatContextMenu');
     contextMenuTarget = chatItem;
     
-    // Позиционирование меню
+
     menu.style.left = x + 'px';
     menu.style.top = y + 'px';
-    
-    // Корректировка позиции если меню выходит за границы экрана
+
     const rect = menu.getBoundingClientRect();
     if (rect.right > window.innerWidth) {
         menu.style.left = (window.innerWidth - rect.width - 10) + 'px';
@@ -265,11 +263,11 @@ async function deleteChat() {
     
     if (confirm('Удалить этот чат?')) {
         try {
-            // Удаляем чат из списка пользователя
+
             const chatRef = ref(database, `userChats/${currentUser.id}/${userId}`);
             await remove(chatRef);
             
-            // Если это текущий открытый чат, закрываем его
+
             if (currentChatUser && currentChatUser.id === userId) {
                 currentChatUser = null;
                 document.getElementById('welcomeScreen').style.display = 'flex';
@@ -298,7 +296,7 @@ function viewChatProfile() {
 
 
 function hashPassword(password) {
-    // Простая хеш-функция для паролей
+
     let hash = 0;
     for (let i = 0; i < password.length; i++) {
         const char = password.charCodeAt(i);
@@ -343,7 +341,7 @@ async function login() {
         
         localStorage.setItem('waveUser', JSON.stringify(currentUser));
         
-        // Обновляем статус онлайн
+
         const userRef = ref(database, `users/${currentUser.id}`);
         await update(userRef, {
             online: true,
@@ -397,7 +395,7 @@ async function register() {
         return;
     }
     
-    // Новая проверка пароля - только минимальная длина
+
     if (password.length < 3) {
         errorDiv.textContent = 'Пароль должен содержать минимум 3 символа';
         errorDiv.style.display = 'block';
@@ -405,7 +403,7 @@ async function register() {
     }
     
     try {
-        // Проверяем уникальность username
+
         const usersRef = ref(database, 'users');
         const snapshot = await get(usersRef);
         const users = snapshot.val() || {};
@@ -580,7 +578,7 @@ function createChatItem(chat) {
     const time = chat.lastMessageTime ? formatTime(chat.lastMessageTime) : '';
     const unreadHtml = chat.unread > 0 ? `<div class="chat-item-unread">${chat.unread}</div>` : '';
     
-    // Определяем префикс для последнего сообщения
+
     let lastMessageDisplay = chat.lastMessage;
     if (chat.lastMessageSender === currentUser.id) {
         lastMessageDisplay = `Вы: ${chat.lastMessage}`;
@@ -715,7 +713,7 @@ async function openChat(userId, userData) {
 async function markAsRead(userId) {
     const chatRef = ref(database, `userChats/${currentUser.id}/${userId}`);
     await update(chatRef, { unread: 0 }).catch(() => {
-        // Если чата еще нет, игнорируем ошибку
+
     });
 }
 
@@ -848,7 +846,7 @@ async function sendMessage() {
         
         await push(messagesRef, messageData);
         
-        // Обновляем чаты с указанием отправителя
+
         const userChatData = {
             lastMessage: text,
             lastMessageTime: Date.now(),
@@ -871,7 +869,7 @@ async function sendMessage() {
                 otherUserChatData.unread = (data.unread || 0) + 1;
             }
         } catch (e) {
-            // Если чата еще нет, unread остается 1
+
         }
         
         const userChatRef = ref(database, `userChats/${currentUser.id}/${currentChatUser.id}`);
@@ -971,7 +969,7 @@ async function updateLastMessage(text) {
             unread: 1
         };
         
-        // Получаем текущее количество непрочитанных
+
         const otherUserChatRef = ref(database, `userChats/${currentChatUser.id}/${currentUser.id}`);
         try {
             const snapshot = await get(otherUserChatRef);
@@ -980,10 +978,10 @@ async function updateLastMessage(text) {
                 otherUserChatData.unread = (data.unread || 0) + 1;
             }
         } catch (e) {
-            // Если чата еще нет, unread остается 1
+
         }
         
-        // Записываем данные
+
         const userChatRef = ref(database, `userChats/${currentUser.id}/${currentChatUser.id}`);
         await set(userChatRef, userChatData);
         await set(otherUserChatRef, otherUserChatData);
@@ -1028,7 +1026,7 @@ async function openProfile(userId) {
             usernameDiv.style.display = 'none';
         }
         
-        // Обновляем статус в реальном времени
+
         const statusRef = ref(database, `users/${userId}`);
         onValue(statusRef, (snapshot) => {
             const user = snapshot.val();
@@ -1043,7 +1041,7 @@ async function openProfile(userId) {
                     lastSeenDiv.style.display = 'none';
                 }
                 
-                // Показываем IP для Developer
+
                 const ipDiv = document.getElementById('profileIp');
                 if (isDeveloper && !isOwnProfile && user.ip) {
                     ipDiv.textContent = `IP: ${user.ip}`;
@@ -1075,7 +1073,7 @@ async function openProfile(userId) {
         document.getElementById('logoutProfileBtn').style.display = isOwnProfile ? 'block' : 'none';
         document.getElementById('deleteAccountBtn').style.display = isOwnProfile ? 'block' : 'none';
         
-        // Кнопка блокировки
+
         const blockBtn = document.getElementById('blockUserBtn');
         if (!isOwnProfile) {
             blockBtn.style.display = 'block';
@@ -1104,7 +1102,7 @@ async function deleteAccount() {
             const userRef = ref(database, `users/${currentUser.id}`);
             await remove(userRef);
             
-            // Удаляем все чаты пользователя
+
             const userChatsRef = ref(database, `userChats/${currentUser.id}`);
             await remove(userChatsRef);
             
@@ -1154,8 +1152,7 @@ async function saveUsername() {
         hideUsernameChange();
         return;
     }
-    
-    // Проверяем доступность username
+
     const usersRef = ref(database, 'users');
     const snapshot = await get(usersRef);
     const users = snapshot.val() || {};
@@ -1201,28 +1198,28 @@ async function toggleBlockUser() {
     const isBlocked = blockedUsers.has(userId);
     
     if (isBlocked) {
-        // Разблокировать
+
         const blockRef = ref(database, `users/${currentUser.id}/blockedUsers/${userId}`);
         await remove(blockRef);
         blockedUsers.delete(userId);
         alert('Пользователь разблокирован');
     } else {
-        // Заблокировать
+
         const blockRef = ref(database, `users/${currentUser.id}/blockedUsers/${userId}`);
         await set(blockRef, true);
         blockedUsers.add(userId);
         alert('Пользователь заблокирован');
     }
     
-    // Обновляем кнопку
+
     const blockBtn = document.getElementById('blockUserBtn');
     blockBtn.textContent = isBlocked ? '🚫 Заблокировать' : '✅ Разблокировать';
     blockBtn.className = isBlocked ? 'btn-profile btn-block' : 'btn-profile btn-unblock';
     
-    // Перезагружаем чаты
+
     loadChats();
     
-    // Если чат открыт с заблокированным пользователем, закрываем его
+
     if (!isBlocked && currentChatUser && currentChatUser.id === userId) {
         currentChatUser = null;
         document.getElementById('welcomeScreen').style.display = 'flex';
