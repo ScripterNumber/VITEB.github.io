@@ -44,6 +44,14 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     setupMobileNav();
     setupChatContextMenu();
+
+     window.addEventListener('resize', () => {
+        if (window.innerWidth > 768) {
+            document.getElementById('sidebar').classList.remove('hidden');
+            document.getElementById('chatArea').classList.remove('active');
+            document.getElementById('mobileNav').style.display = 'none';
+        }
+    });
 });
 
 function checkExistingUser() {
@@ -143,7 +151,25 @@ function setupEventListeners() {
     document.getElementById('deleteMessageBtn').addEventListener('click', deleteMessage);
 
     document.getElementById('menuToggleBtn').addEventListener('click', toggleSidebar);
-    document.getElementById('backToChatBtn').addEventListener('click', closeSidebar);
+    document.getElementById('backToChatBtn').addEventListener('click', () => {
+    if (window.innerWidth <= 768) {
+        document.getElementById('sidebar').classList.remove('hidden');
+        document.getElementById('chatArea').classList.remove('active');
+        
+        const checkChats = async () => {
+            const chatsRef = ref(database, `userChats/${currentUser.id}`);
+            const snapshot = await get(chatsRef);
+            const chats = snapshot.val() || {};
+            
+            if (Object.keys(chats).length > 0) {
+                document.getElementById('mobileNav').classList.add('show');
+            }
+        };
+        checkChats();
+    } else {
+        closeSidebar();
+    }
+});
     document.getElementById('logoutBtn').addEventListener('click', logout);
     document.getElementById('clearChatBtn').addEventListener('click', clearCurrentChat);
     document.getElementById('chatUserInfo').addEventListener('click', () => {
@@ -162,12 +188,32 @@ function setupEventListeners() {
 
 function setupMobileNav() {
     if (window.innerWidth <= 768) {
+        const mobileNav = document.getElementById('mobileNav');
+
+        const checkChats = async () => {
+            const chatsRef = ref(database, `userChats/${currentUser.id}`);
+            const snapshot = await get(chatsRef);
+            const chats = snapshot.val() || {};
+            
+            if (Object.keys(chats).length > 0) {
+                mobileNav.classList.add('show');
+            } else {
+                mobileNav.classList.remove('show');
+            }
+        };
+        
+        checkChats();
+        
         document.getElementById('navChats').addEventListener('click', () => {
             showMobileView('chats');
+            document.getElementById('sidebar').classList.remove('hidden');
+            document.getElementById('chatArea').classList.remove('active');
         });
         
         document.getElementById('navSearch').addEventListener('click', () => {
             showMobileView('search');
+            document.getElementById('sidebar').classList.remove('hidden');
+            document.getElementById('chatArea').classList.remove('active');
         });
         
         document.getElementById('navProfile').addEventListener('click', () => {
@@ -525,12 +571,17 @@ async function setupOnlineStatus() {
 async function loadChats() {
     const chatsRef = ref(database, `userChats/${currentUser.id}`);
     
-    onValue(chatsRef, async (snapshot) => {
+
+    if (window.chatsListener) {
+        off(chatsRef, window.chatsListener);
+    }
+    
+    window.chatsListener = onValue(chatsRef, async (snapshot) => {
         const chats = snapshot.val() || {};
         const container = document.getElementById('chatsContainer');
-        container.innerHTML = '';
         
-        const chatArray = [];
+
+        const chatMap = new Map();
         
         for (const [userId, chatData] of Object.entries(chats)) {
             if (blockedUsers.has(userId)) continue;
@@ -539,24 +590,142 @@ async function loadChats() {
             const userSnapshot = await get(userRef);
             const userData = userSnapshot.val();
             
-            if (userData) {
-                chatArray.push({
+            if (userData && !chatMap.has(userId)) {
+                chatMap.set(userId, {
                     userId,
                     userData,
                     lastMessage: chatData.lastMessage || '',
                     lastMessageTime: chatData.lastMessageTime || 0,
+                    lastMessageSender: chatData.lastMessageSender || '',
                     unread: chatData.unread || 0
                 });
             }
         }
         
-        chatArray.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
+
+        const chatArray = Array.from(chatMap.values())
+            .sort((a, b) => b.lastMessageTime - a.lastMessageTime);
         
+
+        container.innerHTML = '';
         chatArray.forEach(chat => {
             const chatItem = createChatItem(chat);
             container.appendChild(chatItem);
         });
+
+        if (window.innerWidth <= 768 && chatArray.length > 0) {
+            document.getElementById('mobileNav').style.display = 'flex';
+        }
     });
+}
+
+function addMobileStyles() {
+    const style = document.createElement('style');
+    style.textContent = `
+
+        @media (max-width: 768px) {
+            #app {
+                height: 100vh;
+                height: 100dvh; 
+                overflow: hidden;
+            }
+            
+            #sidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 60px; 
+                z-index: 100;
+            }
+            
+            #chatArea {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                display: flex;
+                flex-direction: column;
+            }
+            
+            #messagesContainer {
+                flex: 1;
+                overflow-y: auto;
+                padding-bottom: 10px;
+
+                padding-bottom: env(safe-area-inset-bottom, 10px);
+            }
+            
+            #messageInputContainer {
+                position: sticky;
+                bottom: 0;
+                background: var(--bg-primary);
+                border-top: 1px solid var(--border-color);
+                padding: 10px;
+                padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+                z-index: 10;
+            }
+            
+            #mobileNav {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                height: 60px;
+                background: var(--bg-primary);
+                border-top: 1px solid var(--border-color);
+                display: none; 
+                align-items: center;
+                justify-content: space-around;
+                z-index: 1000;
+
+                padding-bottom: env(safe-area-inset-bottom, 0px);
+            }
+            
+            #mobileNav.show {
+                display: flex;
+            }
+            
+
+            #chatArea.active ~ #mobileNav {
+                display: none;
+            }
+            
+
+            #chatArea.active #messagesContainer {
+                height: calc(100vh - 120px - env(safe-area-inset-bottom, 0px));
+                height: calc(100dvh - 120px - env(safe-area-inset-bottom, 0px));
+            }
+            
+
+            #messageInput {
+                width: 100%;
+                max-width: 100%;
+                box-sizing: border-box;
+            }
+            
+            .message-input-wrapper {
+                display: flex;
+                gap: 10px;
+                align-items: flex-end;
+                width: 100%;
+            }
+            
+
+            .profile-modal {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                max-height: 100vh;
+                max-height: 100dvh;
+                overflow-y: auto;
+            }
+        }
+    `;
+    document.head.appendChild(style);
 }
 
 function createChatItem(chat) {
@@ -705,8 +874,15 @@ async function openChat(userId, userData) {
     
     document.querySelectorAll('.chat-item').forEach(item => item.classList.remove('active'));
     
+
     if (window.innerWidth <= 768) {
-        closeSidebar();
+        document.getElementById('sidebar').classList.add('hidden');
+        document.getElementById('chatArea').classList.add('active');
+        document.getElementById('mobileNav').style.display = 'none';
+
+        setTimeout(() => {
+            document.getElementById('messageInput').focus();
+        }, 100);
     }
 }
 
@@ -825,6 +1001,11 @@ async function sendMessage() {
     
     if (!text && !currentReply) return;
     
+
+    const sendBtn = document.getElementById('sendBtn');
+    if (sendBtn.disabled) return;
+    sendBtn.disabled = true;
+    
     try {
         const chatId = getChatId(currentUser.id, currentChatUser.id);
         const messagesRef = ref(database, `messages/${chatId}`);
@@ -845,42 +1026,37 @@ async function sendMessage() {
         }
         
         await push(messagesRef, messageData);
+
+        const userChatRef = ref(database, `userChats/${currentUser.id}/${currentChatUser.id}`);
+        const otherUserChatRef = ref(database, `userChats/${currentChatUser.id}/${currentUser.id}`);
         
 
-        const userChatData = {
+        await set(userChatRef, {
             lastMessage: text,
             lastMessageTime: Date.now(),
             lastMessageSender: currentUser.id,
             unread: 0
-        };
+        });
         
-        const otherUserChatData = {
+
+        const otherSnapshot = await get(otherUserChatRef);
+        const unreadCount = otherSnapshot.exists() ? (otherSnapshot.val().unread || 0) + 1 : 1;
+        
+        await set(otherUserChatRef, {
             lastMessage: text,
             lastMessageTime: Date.now(),
             lastMessageSender: currentUser.id,
-            unread: 1
-        };
-        
-        const otherUserChatRef = ref(database, `userChats/${currentChatUser.id}/${currentUser.id}`);
-        try {
-            const snapshot = await get(otherUserChatRef);
-            if (snapshot.exists()) {
-                const data = snapshot.val();
-                otherUserChatData.unread = (data.unread || 0) + 1;
-            }
-        } catch (e) {
-
-        }
-        
-        const userChatRef = ref(database, `userChats/${currentUser.id}/${currentChatUser.id}`);
-        await set(userChatRef, userChatData);
-        await set(otherUserChatRef, otherUserChatData);
+            unread: unreadCount
+        });
         
         input.value = '';
         input.style.height = 'auto';
+        
     } catch (error) {
         console.error('Error sending message:', error);
         alert('Ошибка отправки сообщения. Попробуйте еще раз.');
+    } finally {
+        sendBtn.disabled = false;
     }
 }
 
