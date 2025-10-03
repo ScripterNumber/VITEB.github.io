@@ -308,12 +308,6 @@ function hashPassword(password) {
     return hash.toString();
 }
 
-function validatePassword(password) {
-    // Проверяем наличие минимум 3 цифр
-    const digitCount = (password.match(/\d/g) || []).length;
-    return digitCount >= 3;
-}
-
 async function login() {
     const username = document.getElementById('loginUsername').value.trim();
     const password = document.getElementById('loginPassword').value;
