@@ -1210,3 +1210,93 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--primary-dark);
 }
+
+/* Добавьте эти стили в конец файла styles.css */
+
+.profile-username {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 10px;
+}
+
+/* Улучшенные стили для мобильных устройств */
+@media (max-width: 768px) {
+    .btn-icon {
+        width: 35px;
+        height: 35px;
+        font-size: 16px;
+    }
+    
+    .chat-header {
+        padding: 12px;
+    }
+    
+    .message-image {
+        max-width: 100%;
+        width: auto;
+        height: auto;
+        max-height: 250px;
+        border-radius: 8px;
+    }
+    
+    .media-upload-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 20px;
+    }
+    
+    .send-btn {
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
+    }
+    
+    .message-bubble {
+        padding: 10px 14px;
+        font-size: 14px;
+    }
+    
+    .message-input {
+        font-size: 14px;
+    }
+    
+    .image-viewer-content {
+        max-width: 95vw;
+        max-height: 95vh;
+    }
+    
+    .profile-box {
+        max-width: 95vw;
+        padding: 20px;
+    }
+    
+    .login-box {
+        padding: 30px 20px;
+    }
+}
+
+    .message {
+        animation: messageSlideSmooth 0.2s ease;
+    }
+    
+    @keyframes messageSlideSmooth {
+        from {
+            opacity: 0;
+            transform: translateY(5px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .message.removing {
+        animation: messageRemove 0.2s ease forwards;
+    }
+    
+    @keyframes messageRemove {
+        to {
+            opacity: 0;
+            transform: translateX(-20px);
+        }
+    }
