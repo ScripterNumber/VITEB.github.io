@@ -23,6 +23,18 @@ let selectedMessage = null;
 let activeChats = {};
 let isEditing = false;
 let existingMessages = new Set();
+let blockedUsers = new Set();
+let userIP = null;
+
+// Получаем IP адрес пользователя
+fetch('https://api.ipify.org?format=json')
+    .then(response => response.json())
+    .then(data => {
+        userIP = data.ip;
+    })
+    .catch(() => {
+        userIP = 'Unknown';
+    });
 
 document.addEventListener('DOMContentLoaded', () => {
     checkExistingUser();
@@ -42,18 +54,8 @@ function checkExistingUser() {
 
 function setupEventListeners() {
     document.getElementById('loginBtn').addEventListener('click', login);
-    document.getElementById('usernameInput').addEventListener('keypress', (e) => {
-        if (e.key === 'Enter' && e.target.value.trim()) {
-            document.getElementById('nameInput').focus();
-        }
-    });
-    document.getElementById('nameInput').addEventListener('keypress', (e) => {
+    document.getElementById('loginInput').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') login();
-    });
-
-    // Валидация username - только английские буквы и цифры
-    document.getElementById('usernameInput').addEventListener('input', (e) => {
-        e.target.value = e.target.value.replace(/[^a-zA-Z0-9]/g, '');
     });
 
     document.getElementById('currentUserInfo').addEventListener('click', () => openProfile(currentUser.id));
@@ -65,6 +67,10 @@ function setupEventListeners() {
     document.getElementById('closeProfileModalBtn').addEventListener('click', closeProfile);
     document.getElementById('messageUserBtn').addEventListener('click', startChatFromProfile);
     document.getElementById('kickUserBtn').addEventListener('click', kickUser);
+    document.getElementById('blockUserBtn').addEventListener('click', toggleBlockUser);
+    document.getElementById('changeUsernameBtn').addEventListener('click', showUsernameChange);
+    document.getElementById('saveUsernameBtn').addEventListener('click', saveUsername);
+    document.getElementById('cancelUsernameBtn').addEventListener('click', hideUsernameChange);
 
     document.querySelectorAll('.avatar-option').forEach(option => {
         option.addEventListener('click', () => {
@@ -110,25 +116,52 @@ function setupEventListeners() {
     document.addEventListener('click', hideMessageMenu);
 }
 
-async function login() {
-    const usernameInput = document.getElementById('usernameInput');
-    const nameInput = document.getElementById('nameInput');
-    const username = usernameInput.value.trim();
-    const name = nameInput.value.trim();
-    const errorDiv = document.getElementById('loginError');
+function generateUsername(name) {
+    let username = name.toLowerCase()
+        .replace(/[а-яё]/g, '') 
+        .replace(/[^a-z0-9]/g, '') 
+        .trim();
     
     if (!username) {
-        errorDiv.textContent = 'Пожалуйста, введите ваш username';
-        errorDiv.style.display = 'block';
-        return;
+        const translit = {
+            'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e',
+            'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
+            'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+            'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch', 'ъ': '',
+            'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
+        };
+        
+        username = name.toLowerCase().split('').map(char => translit[char] || char).join('')
+            .replace(/[^a-z0-9]/g, '')
+            .trim();
     }
-
-    if (username.length < 3) {
-        errorDiv.textContent = 'Username должен содержать минимум 3 символа';
-        errorDiv.style.display = 'block';
-        return;
+    
+    if (!username) {
+        username = 'user' + Date.now().toString().slice(-6);
     }
+    
+    username = username + Math.floor(Math.random() * 1000);
+    
+    return username;
+}
 
+async function isUsernameAvailable(username, excludeUserId = null) {
+    const usersRef = ref(database, 'users');
+    const snapshot = await get(usersRef);
+    const users = snapshot.val() || {};
+    
+    return !Object.entries(users).some(([userId, userData]) => 
+        userId !== excludeUserId && 
+        userData.username && 
+        userData.username.toLowerCase() === username.toLowerCase()
+    );
+}
+
+async function login() {
+    const input = document.getElementById('loginInput');
+    const name = input.value.trim();
+    const errorDiv = document.getElementById('loginError');
+    
     if (!name) {
         errorDiv.textContent = 'Пожалуйста, введите ваше имя';
         errorDiv.style.display = 'block';
@@ -142,22 +175,20 @@ async function login() {
     }
 
     try {
+        let username = generateUsername(name);
+        
         const usersRef = ref(database, 'users');
         const snapshot = await get(usersRef);
         const users = snapshot.val() || {};
         
-        const usernameExists = Object.values(users).some(user => 
-            user.username && user.username.toLowerCase() === username.toLowerCase()
-        );
-
-        if (usernameExists) {
-            errorDiv.textContent = 'Этот username уже занят!';
-            errorDiv.style.display = 'block';
-            return;
+        let attempts = 0;
+        while (!await isUsernameAvailable(username) && attempts < 10) {
+            username = generateUsername(name) + Math.floor(Math.random() * 10000);
+            attempts++;
         }
 
         errorDiv.style.display = 'none';
-        isDeveloper = username === 'Developer';
+        isDeveloper = name === 'Developer';
 
         const userId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         currentUser = {
@@ -168,7 +199,8 @@ async function login() {
             avatarImage: null,
             bio: '',
             joinedAt: Date.now(),
-            isDeveloper: isDeveloper
+            isDeveloper: isDeveloper,
+            blockedUsers: []
         };
 
         localStorage.setItem('waveUser', JSON.stringify(currentUser));
@@ -182,7 +214,9 @@ async function login() {
             bio: '',
             online: true,
             isDeveloper: isDeveloper,
-            lastSeen: serverTimestamp()
+            lastSeen: serverTimestamp(),
+            ip: userIP || 'Unknown',
+            blockedUsers: {}
         });
 
         onDisconnect(userRef).update({
@@ -219,10 +253,26 @@ function updateUserUI() {
 function initApp() {
     loadChats();
     setupOnlineStatus();
+    loadBlockedUsers();
+}
+
+async function loadBlockedUsers() {
+    const userRef = ref(database, `users/${currentUser.id}/blockedUsers`);
+    onValue(userRef, (snapshot) => {
+        const blocked = snapshot.val() || {};
+        blockedUsers = new Set(Object.keys(blocked));
+    });
 }
 
 async function setupOnlineStatus() {
     const userRef = ref(database, `users/${currentUser.id}`);
+    
+    // Обновляем IP при каждом входе
+    await update(userRef, {
+        online: true,
+        lastSeen: serverTimestamp(),
+        ip: userIP || 'Unknown'
+    });
     
     window.addEventListener('beforeunload', async () => {
         await update(userRef, {
@@ -250,6 +300,8 @@ async function loadChats() {
         const chatArray = [];
         
         for (const [userId, chatData] of Object.entries(chats)) {
+            if (blockedUsers.has(userId)) continue;
+            
             const userRef = ref(database, `users/${userId}`);
             const userSnapshot = await get(userRef);
             const userData = userSnapshot.val();
@@ -326,8 +378,7 @@ async function searchUsers() {
     resultsDiv.innerHTML = '';
     
     Object.entries(users).forEach(([userId, userData]) => {
-        if (userId !== currentUser.id && userData) {
-            // Поиск по username и name
+        if (userId !== currentUser.id && userData && !blockedUsers.has(userId)) {
             const usernameMatch = userData.username && userData.username.toLowerCase().includes(searchTerm);
             const nameMatch = userData.name && userData.name.toLowerCase().includes(searchTerm);
             
@@ -348,7 +399,7 @@ async function searchUsers() {
                     </div>
                     <div style="flex: 1;">
                         <div style="font-weight: 600;">${userData.name || 'Unknown'}${userData.isDeveloper ? ' <span class="developer-badge">DEV</span>' : ''}</div>
-                        <div style="font-size: 11px; color: var(--text-secondary);">@${userData.username || 'unknown'}</div>
+                        ${userData.username ? `<div style="font-size: 11px; color: var(--text-secondary);">@${userData.username}</div>` : ''}
                         <div style="font-size: 12px; color: var(--text-secondary);">${userData.online ? 'В сети' : 'Не в сети'}</div>
                     </div>
                 `;
@@ -366,10 +417,15 @@ async function searchUsers() {
 }
 
 async function openChat(userId, userData) {
+    if (blockedUsers.has(userId)) {
+        alert('Этот пользователь заблокирован');
+        return;
+    }
+    
     currentChatUser = { id: userId, ...userData };
     
-    // Очищаем существующий список сообщений перед загрузкой новых
     existingMessages.clear();
+    document.getElementById('messagesContainer').innerHTML = '';
     
     document.getElementById('welcomeScreen').style.display = 'none';
     document.getElementById('chatHeader').style.display = 'flex';
@@ -387,8 +443,15 @@ async function openChat(userId, userData) {
     
     document.getElementById('chatUserName').innerHTML = userData.name + (userData.isDeveloper ? ' <span class="developer-badge">DEV</span>' : '');
     
-    const lastSeen = userData.online ? 'В сети' : (userData.lastSeen ? `Был(а) ${formatLastSeen(userData.lastSeen)}` : 'Не в сети');
-    document.getElementById('chatUserStatus').textContent = lastSeen;
+    // Обновляем статус в реальном времени
+    const statusRef = ref(database, `users/${userId}`);
+    onValue(statusRef, (snapshot) => {
+        const user = snapshot.val();
+        if (user) {
+            const lastSeen = user.online ? 'В сети' : (user.lastSeen ? `Был(а) ${formatLastSeen(user.lastSeen)}` : 'Не в сети');
+            document.getElementById('chatUserStatus').textContent = lastSeen;
+        }
+    });
     
     await markAsRead(userId);
     
@@ -408,7 +471,7 @@ async function markAsRead(userId) {
 
 function loadMessages(userId) {
     if (messagesListener) {
-        off(ref(database, `messages/${getChatId(currentUser.id, userId)}`), 'value', messagesListener);
+        messagesListener();
     }
     
     const chatId = getChatId(currentUser.id, userId);
@@ -422,7 +485,6 @@ function loadMessages(userId) {
             return (a[1].timestamp || 0) - (b[1].timestamp || 0);
         });
         
-        // Добавляем только новые сообщения, не перерисовывая существующие
         sortedMessages.forEach(([msgId, msg]) => {
             if (!existingMessages.has(msgId)) {
                 displayMessage(msg, msgId);
@@ -430,9 +492,9 @@ function loadMessages(userId) {
             }
         });
         
-        // Удаляем сообщения, которых больше нет в базе
+        const currentMessageIds = new Set(Object.keys(messages));
         existingMessages.forEach(msgId => {
-            if (!messages[msgId]) {
+            if (!currentMessageIds.has(msgId)) {
                 const msgElement = document.querySelector(`[data-message-id="${msgId}"]`);
                 if (msgElement) {
                     msgElement.remove();
@@ -536,17 +598,19 @@ async function sendMessage() {
         
         await push(messagesRef, messageData);
         
+        // Создаем или обновляем чат для обоих пользователей
         const userChatRef = ref(database, `userChats/${currentUser.id}/${currentChatUser.id}`);
-        await update(userChatRef, {
+        await set(userChatRef, {
             lastMessage: text,
-            lastMessageTime: Date.now()
+            lastMessageTime: Date.now(),
+            unread: 0
         });
         
         const otherUserChatRef = ref(database, `userChats/${currentChatUser.id}/${currentUser.id}`);
         const otherChatSnapshot = await get(otherUserChatRef);
         const otherChatData = otherChatSnapshot.val() || {};
         
-        await update(otherUserChatRef, {
+        await set(otherUserChatRef, {
             lastMessage: text,
             lastMessageTime: Date.now(),
             unread: (otherChatData.unread || 0) + 1
@@ -556,6 +620,7 @@ async function sendMessage() {
         input.style.height = 'auto';
     } catch (error) {
         console.error('Error sending message:', error);
+        alert('Ошибка отправки сообщения. Попробуйте еще раз.');
     }
 }
 
@@ -579,7 +644,7 @@ async function handleMediaUpload(event) {
         img.onload = async function() {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            const maxSize = 800; // Уменьшил размер для мобильных устройств
+            const maxSize = 800;
             
             let width = img.width;
             let height = img.height;
@@ -600,7 +665,7 @@ async function handleMediaUpload(event) {
             canvas.height = height;
             ctx.drawImage(img, 0, 0, width, height);
             
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.7); // Уменьшил качество для экономии места
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
             
             try {
                 const chatId = getChatId(currentUser.id, currentChatUser.id);
@@ -620,6 +685,7 @@ async function handleMediaUpload(event) {
                 await updateLastMessage('📷 Изображение');
             } catch (error) {
                 console.error('Error uploading image:', error);
+                alert('Ошибка загрузки изображения');
             }
         };
         img.src = e.target.result;
@@ -631,16 +697,17 @@ async function handleMediaUpload(event) {
 
 async function updateLastMessage(text) {
     const userChatRef = ref(database, `userChats/${currentUser.id}/${currentChatUser.id}`);
-    await update(userChatRef, {
+    await set(userChatRef, {
         lastMessage: text,
-        lastMessageTime: Date.now()
+        lastMessageTime: Date.now(),
+        unread: 0
     });
     
     const otherUserChatRef = ref(database, `userChats/${currentChatUser.id}/${currentUser.id}`);
     const otherChatSnapshot = await get(otherUserChatRef);
     const otherChatData = otherChatSnapshot.val() || {};
     
-    await update(otherUserChatRef, {
+    await set(otherUserChatRef, {
         lastMessage: text,
         lastMessageTime: Date.now(),
         unread: (otherChatData.unread || 0) + 1
@@ -674,16 +741,40 @@ async function openProfile(userId) {
         }
         
         document.getElementById('profileName').innerHTML = userData.name + (userData.isDeveloper ? ' <span class="developer-badge">DEV</span>' : '');
-        document.getElementById('profileUsername').textContent = `@${userData.username}`;
-        document.getElementById('profileStatus').textContent = userData.online ? 'В сети' : 'Не в сети';
         
-        const lastSeenDiv = document.getElementById('profileLastSeen');
-        if (!userData.online && userData.lastSeen) {
-            lastSeenDiv.textContent = `Был(а) ${formatLastSeen(userData.lastSeen)}`;
-            lastSeenDiv.style.display = 'block';
+        const usernameDiv = document.getElementById('profileUsername');
+        if (userData.username) {
+            usernameDiv.textContent = `@${userData.username}`;
+            usernameDiv.style.display = 'block';
         } else {
-            lastSeenDiv.style.display = 'none';
+            usernameDiv.style.display = 'none';
         }
+        
+        // Обновляем статус в реальном времени
+        const statusRef = ref(database, `users/${userId}`);
+        onValue(statusRef, (snapshot) => {
+            const user = snapshot.val();
+            if (user) {
+                document.getElementById('profileStatus').textContent = user.online ? 'В сети' : 'Не в сети';
+                
+                const lastSeenDiv = document.getElementById('profileLastSeen');
+                if (!user.online && user.lastSeen) {
+                    lastSeenDiv.textContent = `Был(а) ${formatLastSeen(user.lastSeen)}`;
+                    lastSeenDiv.style.display = 'block';
+                } else {
+                    lastSeenDiv.style.display = 'none';
+                }
+                
+                // Показываем IP для Developer
+                const ipDiv = document.getElementById('profileIp');
+                if (isDeveloper && !isOwnProfile && user.ip) {
+                    ipDiv.textContent = `IP: ${user.ip}`;
+                    ipDiv.style.display = 'block';
+                } else {
+                    ipDiv.style.display = 'none';
+                }
+            }
+        });
         
         const bioDiv = document.getElementById('profileBio');
         const bioInput = document.getElementById('bioInput');
@@ -700,9 +791,23 @@ async function openProfile(userId) {
         document.getElementById('uploadLabel').style.display = 'none';
         document.getElementById('avatarSelector').classList.remove('show');
         document.getElementById('editProfileBtn').style.display = isOwnProfile ? 'block' : 'none';
+        document.getElementById('changeUsernameBtn').style.display = isOwnProfile ? 'block' : 'none';
         document.getElementById('saveProfileBtn').style.display = 'none';
         document.getElementById('messageUserBtn').style.display = !isOwnProfile ? 'block' : 'none';
+        
+        // Кнопка блокировки
+        const blockBtn = document.getElementById('blockUserBtn');
+        if (!isOwnProfile) {
+            blockBtn.style.display = 'block';
+            blockBtn.textContent = blockedUsers.has(userId) ? '✅ Разблокировать' : '🚫 Заблокировать';
+            blockBtn.className = blockedUsers.has(userId) ? 'btn-profile btn-unblock' : 'btn-profile btn-block';
+        } else {
+            blockBtn.style.display = 'none';
+        }
+        
         document.getElementById('kickUserBtn').style.display = (isDeveloper && !isOwnProfile) ? 'block' : 'none';
+        
+        document.getElementById('usernameChangeContainer').style.display = 'none';
         
         modal.dataset.userId = userId;
         modal.classList.add('show');
@@ -710,6 +815,111 @@ async function openProfile(userId) {
         
     } catch (error) {
         console.error('Error opening profile:', error);
+    }
+}
+
+function showUsernameChange() {
+    document.getElementById('usernameChangeContainer').style.display = 'block';
+    document.getElementById('newUsernameInput').value = currentUser.username;
+    document.getElementById('changeUsernameBtn').style.display = 'none';
+}
+
+function hideUsernameChange() {
+    document.getElementById('usernameChangeContainer').style.display = 'none';
+    document.getElementById('changeUsernameBtn').style.display = 'block';
+}
+
+async function saveUsername() {
+    const newUsername = document.getElementById('newUsernameInput').value.trim();
+    const errorDiv = document.getElementById('usernameError');
+    
+    if (!newUsername) {
+        errorDiv.textContent = 'Username не может быть пустым';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    if (!/^[a-zA-Z0-9]+$/.test(newUsername)) {
+        errorDiv.textContent = 'Username может содержать только английские буквы и цифры';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    if (newUsername.length < 3) {
+        errorDiv.textContent = 'Username должен содержать минимум 3 символа';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    if (newUsername === currentUser.username) {
+        hideUsernameChange();
+        return;
+    }
+    
+    const isAvailable = await isUsernameAvailable(newUsername, currentUser.id);
+    if (!isAvailable) {
+        errorDiv.textContent = 'Этот username уже занят';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    try {
+        currentUser.username = newUsername;
+        
+        const userRef = ref(database, `users/${currentUser.id}`);
+        await update(userRef, {
+            username: newUsername
+        });
+        
+        localStorage.setItem('waveUser', JSON.stringify(currentUser));
+        
+        document.getElementById('profileUsername').textContent = `@${newUsername}`;
+        
+        errorDiv.style.display = 'none';
+        hideUsernameChange();
+        
+    } catch (error) {
+        console.error('Error saving username:', error);
+        errorDiv.textContent = 'Ошибка сохранения username';
+        errorDiv.style.display = 'block';
+    }
+}
+
+async function toggleBlockUser() {
+    const userId = document.getElementById('profileModal').dataset.userId;
+    if (!userId) return;
+    
+    const isBlocked = blockedUsers.has(userId);
+    
+    if (isBlocked) {
+        // Разблокировать
+        const blockRef = ref(database, `users/${currentUser.id}/blockedUsers/${userId}`);
+        await remove(blockRef);
+        blockedUsers.delete(userId);
+        alert('Пользователь разблокирован');
+    } else {
+        // Заблокировать
+        const blockRef = ref(database, `users/${currentUser.id}/blockedUsers/${userId}`);
+        await set(blockRef, true);
+        blockedUsers.add(userId);
+        alert('Пользователь заблокирован');
+    }
+    
+    // Обновляем кнопку
+    const blockBtn = document.getElementById('blockUserBtn');
+    blockBtn.textContent = isBlocked ? '🚫 Заблокировать' : '✅ Разблокировать';
+    blockBtn.className = isBlocked ? 'btn-profile btn-block' : 'btn-profile btn-unblock';
+    
+    // Перезагружаем чаты
+    loadChats();
+    
+    // Если чат открыт с заблокированным пользователем, закрываем его
+    if (!isBlocked && currentChatUser && currentChatUser.id === userId) {
+        currentChatUser = null;
+        document.getElementById('welcomeScreen').style.display = 'flex';
+        document.getElementById('chatHeader').style.display = 'none';
+        document.getElementById('messagesContainer').style.display = 'none';
+        document.getElementById('messageInputContainer').style.display = 'none';
     }
 }
 
@@ -727,6 +937,7 @@ function editProfile() {
     
     document.getElementById('editProfileBtn').style.display = 'none';
     document.getElementById('saveProfileBtn').style.display = 'block';
+    document.getElementById('changeUsernameBtn').style.display = 'none';
 }
 
 function toggleAvatarSelector() {
@@ -826,6 +1037,7 @@ async function saveProfile() {
         document.getElementById('uploadLabel').style.display = 'none';
         document.getElementById('avatarSelector').classList.remove('show');
         document.getElementById('editProfileBtn').style.display = 'block';
+        document.getElementById('changeUsernameBtn').style.display = 'block';
         document.getElementById('saveProfileBtn').style.display = 'none';
         
         isEditing = false;
@@ -895,15 +1107,12 @@ window.showMessageMenu = function(event, msgId, author, text, isOwn) {
     
     document.getElementById('deleteMessageBtn').style.display = (isOwn || isDeveloper) ? 'flex' : 'none';
     
-    // Позиционирование меню для мобильных устройств
-    const rect = event.target.getBoundingClientRect();
-    const menuHeight = 150; // Примерная высота меню
-    const menuWidth = 150; // Примерная ширина меню
+    const menuHeight = 150;
+    const menuWidth = 150;
     
     let top = event.pageY;
     let left = event.pageX;
     
-    // Проверяем, не выходит ли меню за границы экрана
     if (left + menuWidth > window.innerWidth) {
         left = window.innerWidth - menuWidth - 10;
     }
@@ -925,7 +1134,11 @@ function hideMessageMenu() {
 
 function copyMessage() {
     if (selectedMessage) {
-        navigator.clipboard.writeText(selectedMessage.text);
+        navigator.clipboard.writeText(selectedMessage.text).then(() => {
+            console.log('Текст скопирован');
+        }).catch(err => {
+            console.error('Ошибка копирования:', err);
+        });
     }
     hideMessageMenu();
 }
@@ -984,6 +1197,7 @@ async function clearCurrentChat() {
         const messagesRef = ref(database, `messages/${chatId}`);
         await remove(messagesRef);
         existingMessages.clear();
+        document.getElementById('messagesContainer').innerHTML = '';
     }
 }
 
