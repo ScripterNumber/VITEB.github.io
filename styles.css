@@ -1356,6 +1356,138 @@ body {
     flex: 1;
 }
 
+/* Добавьте эти стили к существующему styles.css */
+
+.login-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.login-tab {
+    flex: 1;
+    padding: 10px;
+    background: var(--bg-chat);
+    border: none;
+    border-radius: 8px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.login-tab.active {
+    background: var(--primary);
+    color: white;
+}
+
+.login-form, .register-form {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.profile-ip {
+    font-size: 12px;
+    color: var(--danger);
+    margin-top: 5px;
+    font-weight: bold;
+}
+
+.btn-delete {
+    background: var(--danger);
+    color: white;
+}
+
+.btn-logout {
+    background: var(--primary-dark);
+    color: white;
+}
+
+.btn-block {
+    background: var(--danger);
+    color: white;
+}
+
+.btn-unblock {
+    background: var(--online);
+    color: white;
+}
+
+.btn-change-username {
+    background: var(--accent);
+    color: white;
+}
+
+.username-change-container {
+    margin-top: 20px;
+    padding: 15px;
+    background: var(--bg-chat);
+    border-radius: 10px;
+}
+
+.username-error {
+    color: var(--danger);
+    font-size: 12px;
+    margin-top: 5px;
+}
+
+.username-buttons {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.username-buttons button {
+    flex: 1;
+}
+
+/* Улучшение кнопок для мобильных */
+@media (max-width: 768px) {
+    .chat-actions {
+        display: flex !important;
+        gap: 5px;
+    }
+    
+    .btn-icon {
+        width: 35px !important;
+        height: 35px !important;
+        font-size: 16px !important;
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .menu-toggle {
+        display: flex !important;
+    }
+    
+    .media-upload-btn {
+        width: 40px !important;
+        height: 40px !important;
+        font-size: 20px !important;
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .send-btn {
+        width: 40px !important;
+        height: 40px !important;
+        font-size: 18px !important;
+        display: flex !important;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .message-image {
+        max-width: 100%;
+        width: auto;
+        height: auto;
+        max-height: 250px;
+        border-radius: 8px;
+    }
+}
+
 @media (max-width: 768px) {
     .chat-actions {
         display: flex !important;
