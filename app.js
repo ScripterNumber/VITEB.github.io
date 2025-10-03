@@ -87,12 +87,12 @@ function setupEventListeners() {
     document.getElementById('loginBtn').addEventListener('click', login);
     document.getElementById('registerBtn').addEventListener('click', register);
     
-    // Валидация username при регистрации
+    // Валидация username при регистрации (оставляем только для username)
     document.getElementById('registerUsername').addEventListener('input', (e) => {
         e.target.value = e.target.value.replace(/[^a-zA-Z0-9]/g, '');
     });
     
-    // Enter для быстрого входа
+    // Enter для быстрого входа (оставляем как есть)
     document.getElementById('loginPassword').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') login();
     });
@@ -100,6 +100,7 @@ function setupEventListeners() {
         if (e.key === 'Enter') register();
     });
 
+    // Остальные обработчики остаются без изменений...
     document.getElementById('currentUserInfo').addEventListener('click', () => openProfile(currentUser.id));
     document.getElementById('profileAvatar').addEventListener('click', toggleAvatarSelector);
     document.getElementById('avatarUpload').addEventListener('change', uploadAvatar);
@@ -402,8 +403,9 @@ async function register() {
         return;
     }
     
-    if (!validatePassword(password)) {
-        errorDiv.textContent = 'Пароль должен содержать минимум 3 цифры';
+    // Новая проверка пароля - только минимальная длина
+    if (password.length < 3) {
+        errorDiv.textContent = 'Пароль должен содержать минимум 3 символа';
         errorDiv.style.display = 'block';
         return;
     }
