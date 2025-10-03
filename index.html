@@ -10,9 +10,10 @@
     <div class="login-modal" id="loginModal">
         <div class="login-box">
             <h1 class="login-title">👋 Wave Chat</h1>
-            <p class="login-subtitle">Введите ваше имя для входа</p>
-            <input type="text" class="input-field" id="loginInput" placeholder="Ваше имя" maxlength="20" autocomplete="off">
-            <div class="login-error" id="loginError">Это имя уже занято!</div>
+            <p class="login-subtitle">Регистрация в чате</p>
+            <input type="text" class="input-field" id="usernameInput" placeholder="Username (только англ. буквы и цифры)" maxlength="20" autocomplete="off">
+            <input type="text" class="input-field" id="nameInput" placeholder="Ваше имя" maxlength="30" autocomplete="off">
+            <div class="login-error" id="loginError"></div>
             <button class="btn-login" id="loginBtn">Войти в чат</button>
         </div>
     </div>
@@ -39,6 +40,7 @@
                     <span id="profileName">User</span>
                     <span class="developer-badge" id="devBadge" style="display: none;">DEVELOPER</span>
                 </div>
+                <div class="profile-username" id="profileUsername">@username</div>
                 <div class="profile-status" id="profileStatus">В сети</div>
                 <div class="profile-last-seen" id="profileLastSeen"></div>
                 <div class="profile-bio" id="profileBio"></div>
@@ -101,7 +103,7 @@
             </div>
             
             <div class="search-container">
-                <input type="text" id="searchInput" placeholder="🔍 Поиск по имени..." class="search-input">
+                <input type="text" id="searchInput" placeholder="Поиск" class="search-input">
                 <div class="search-results" id="searchResults"></div>
             </div>
             
