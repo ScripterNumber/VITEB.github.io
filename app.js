@@ -8,7 +8,8 @@ import {
     set,
     remove,
     get,
-    update
+    update,
+    off
 } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js";
 
 let currentUser = null;
@@ -21,6 +22,7 @@ let currentReply = null;
 let selectedMessage = null;
 let activeChats = {};
 let isEditing = false;
+let existingMessages = new Set();
 
 document.addEventListener('DOMContentLoaded', () => {
     checkExistingUser();
@@ -40,8 +42,18 @@ function checkExistingUser() {
 
 function setupEventListeners() {
     document.getElementById('loginBtn').addEventListener('click', login);
-    document.getElementById('loginInput').addEventListener('keypress', (e) => {
+    document.getElementById('usernameInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter' && e.target.value.trim()) {
+            document.getElementById('nameInput').focus();
+        }
+    });
+    document.getElementById('nameInput').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') login();
+    });
+
+    // Валидация username - только английские буквы и цифры
+    document.getElementById('usernameInput').addEventListener('input', (e) => {
+        e.target.value = e.target.value.replace(/[^a-zA-Z0-9]/g, '');
     });
 
     document.getElementById('currentUserInfo').addEventListener('click', () => openProfile(currentUser.id));
@@ -99,10 +111,24 @@ function setupEventListeners() {
 }
 
 async function login() {
-    const input = document.getElementById('loginInput');
-    const name = input.value.trim();
+    const usernameInput = document.getElementById('usernameInput');
+    const nameInput = document.getElementById('nameInput');
+    const username = usernameInput.value.trim();
+    const name = nameInput.value.trim();
     const errorDiv = document.getElementById('loginError');
     
+    if (!username) {
+        errorDiv.textContent = 'Пожалуйста, введите ваш username';
+        errorDiv.style.display = 'block';
+        return;
+    }
+
+    if (username.length < 3) {
+        errorDiv.textContent = 'Username должен содержать минимум 3 символа';
+        errorDiv.style.display = 'block';
+        return;
+    }
+
     if (!name) {
         errorDiv.textContent = 'Пожалуйста, введите ваше имя';
         errorDiv.style.display = 'block';
@@ -120,22 +146,23 @@ async function login() {
         const snapshot = await get(usersRef);
         const users = snapshot.val() || {};
         
-        const nameExists = Object.values(users).some(user => 
-            user.name && user.name.toLowerCase() === name.toLowerCase() && user.online
+        const usernameExists = Object.values(users).some(user => 
+            user.username && user.username.toLowerCase() === username.toLowerCase()
         );
 
-        if (nameExists) {
-            errorDiv.textContent = 'Это имя уже занято!';
+        if (usernameExists) {
+            errorDiv.textContent = 'Этот username уже занят!';
             errorDiv.style.display = 'block';
             return;
         }
 
         errorDiv.style.display = 'none';
-        isDeveloper = name === 'Developer';
+        isDeveloper = username === 'Developer';
 
         const userId = Date.now() + '_' + Math.random().toString(36).substr(2, 9);
         currentUser = {
             id: userId,
+            username: username,
             name: name,
             avatar: 1,
             avatarImage: null,
@@ -148,6 +175,7 @@ async function login() {
 
         const userRef = ref(database, `users/${userId}`);
         await set(userRef, {
+            username: username,
             name: name,
             avatar: 1,
             avatarImage: null,
@@ -298,40 +326,50 @@ async function searchUsers() {
     resultsDiv.innerHTML = '';
     
     Object.entries(users).forEach(([userId, userData]) => {
-        if (userId !== currentUser.id && userData.name.toLowerCase().includes(searchTerm)) {
-            const resultItem = document.createElement('div');
-            resultItem.className = 'search-result-item';
+        if (userId !== currentUser.id && userData) {
+            // Поиск по username и name
+            const usernameMatch = userData.username && userData.username.toLowerCase().includes(searchTerm);
+            const nameMatch = userData.name && userData.name.toLowerCase().includes(searchTerm);
             
-            let avatarHtml;
-            if (userData.avatarImage) {
-                avatarHtml = `<img src="${userData.avatarImage}" alt="">`;
-            } else {
-                avatarHtml = userData.name.charAt(0).toUpperCase();
+            if (usernameMatch || nameMatch) {
+                const resultItem = document.createElement('div');
+                resultItem.className = 'search-result-item';
+                
+                let avatarHtml;
+                if (userData.avatarImage) {
+                    avatarHtml = `<img src="${userData.avatarImage}" alt="">`;
+                } else {
+                    avatarHtml = userData.name ? userData.name.charAt(0).toUpperCase() : '?';
+                }
+                
+                resultItem.innerHTML = `
+                    <div class="chat-item-avatar avatar-gradient-${userData.avatar || 1}" style="width: 35px; height: 35px; font-size: 14px;">
+                        ${avatarHtml}
+                    </div>
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600;">${userData.name || 'Unknown'}${userData.isDeveloper ? ' <span class="developer-badge">DEV</span>' : ''}</div>
+                        <div style="font-size: 11px; color: var(--text-secondary);">@${userData.username || 'unknown'}</div>
+                        <div style="font-size: 12px; color: var(--text-secondary);">${userData.online ? 'В сети' : 'Не в сети'}</div>
+                    </div>
+                `;
+                
+                resultItem.addEventListener('click', () => {
+                    openChat(userId, userData);
+                    document.getElementById('searchInput').value = '';
+                    resultsDiv.innerHTML = '';
+                });
+                
+                resultsDiv.appendChild(resultItem);
             }
-            
-            resultItem.innerHTML = `
-                <div class="chat-item-avatar avatar-gradient-${userData.avatar || 1}" style="width: 35px; height: 35px; font-size: 14px;">
-                    ${avatarHtml}
-                </div>
-                <div style="flex: 1;">
-                    <div style="font-weight: 600;">${userData.name}${userData.isDeveloper ? ' <span class="developer-badge">DEV</span>' : ''}</div>
-                    <div style="font-size: 12px; color: var(--text-secondary);">${userData.online ? 'В сети' : 'Не в сети'}</div>
-                </div>
-            `;
-            
-            resultItem.addEventListener('click', () => {
-                openChat(userId, userData);
-                document.getElementById('searchInput').value = '';
-                resultsDiv.innerHTML = '';
-            });
-            
-            resultsDiv.appendChild(resultItem);
         }
     });
 }
 
 async function openChat(userId, userData) {
     currentChatUser = { id: userId, ...userData };
+    
+    // Очищаем существующий список сообщений перед загрузкой новых
+    existingMessages.clear();
     
     document.getElementById('welcomeScreen').style.display = 'none';
     document.getElementById('chatHeader').style.display = 'flex';
@@ -370,7 +408,7 @@ async function markAsRead(userId) {
 
 function loadMessages(userId) {
     if (messagesListener) {
-        messagesListener();
+        off(ref(database, `messages/${getChatId(currentUser.id, userId)}`), 'value', messagesListener);
     }
     
     const chatId = getChatId(currentUser.id, userId);
@@ -379,14 +417,28 @@ function loadMessages(userId) {
     messagesListener = onValue(messagesRef, (snapshot) => {
         const messages = snapshot.val() || {};
         const container = document.getElementById('messagesContainer');
-        container.innerHTML = '';
         
         const sortedMessages = Object.entries(messages).sort((a, b) => {
             return (a[1].timestamp || 0) - (b[1].timestamp || 0);
         });
         
+        // Добавляем только новые сообщения, не перерисовывая существующие
         sortedMessages.forEach(([msgId, msg]) => {
-            displayMessage(msg, msgId);
+            if (!existingMessages.has(msgId)) {
+                displayMessage(msg, msgId);
+                existingMessages.add(msgId);
+            }
+        });
+        
+        // Удаляем сообщения, которых больше нет в базе
+        existingMessages.forEach(msgId => {
+            if (!messages[msgId]) {
+                const msgElement = document.querySelector(`[data-message-id="${msgId}"]`);
+                if (msgElement) {
+                    msgElement.remove();
+                    existingMessages.delete(msgId);
+                }
+            }
         });
         
         scrollToBottom();
@@ -399,6 +451,7 @@ function displayMessage(msg, msgId) {
     if (msg.type === 'system') {
         const systemMsg = document.createElement('div');
         systemMsg.className = 'system-message';
+        systemMsg.dataset.messageId = msgId;
         systemMsg.textContent = msg.text;
         container.appendChild(systemMsg);
         return;
@@ -526,7 +579,7 @@ async function handleMediaUpload(event) {
         img.onload = async function() {
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
-            const maxSize = 1200;
+            const maxSize = 800; // Уменьшил размер для мобильных устройств
             
             let width = img.width;
             let height = img.height;
@@ -547,7 +600,7 @@ async function handleMediaUpload(event) {
             canvas.height = height;
             ctx.drawImage(img, 0, 0, width, height);
             
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.7); // Уменьшил качество для экономии места
             
             try {
                 const chatId = getChatId(currentUser.id, currentChatUser.id);
@@ -621,6 +674,7 @@ async function openProfile(userId) {
         }
         
         document.getElementById('profileName').innerHTML = userData.name + (userData.isDeveloper ? ' <span class="developer-badge">DEV</span>' : '');
+        document.getElementById('profileUsername').textContent = `@${userData.username}`;
         document.getElementById('profileStatus').textContent = userData.online ? 'В сети' : 'Не в сети';
         
         const lastSeenDiv = document.getElementById('profileLastSeen');
@@ -841,8 +895,25 @@ window.showMessageMenu = function(event, msgId, author, text, isOwn) {
     
     document.getElementById('deleteMessageBtn').style.display = (isOwn || isDeveloper) ? 'flex' : 'none';
     
-    menu.style.left = event.pageX + 'px';
-    menu.style.top = event.pageY + 'px';
+    // Позиционирование меню для мобильных устройств
+    const rect = event.target.getBoundingClientRect();
+    const menuHeight = 150; // Примерная высота меню
+    const menuWidth = 150; // Примерная ширина меню
+    
+    let top = event.pageY;
+    let left = event.pageX;
+    
+    // Проверяем, не выходит ли меню за границы экрана
+    if (left + menuWidth > window.innerWidth) {
+        left = window.innerWidth - menuWidth - 10;
+    }
+    
+    if (top + menuHeight > window.innerHeight) {
+        top = window.innerHeight - menuHeight - 10;
+    }
+    
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
     menu.classList.add('show');
     
     event.stopPropagation();
@@ -912,6 +983,7 @@ async function clearCurrentChat() {
         const chatId = getChatId(currentUser.id, currentChatUser.id);
         const messagesRef = ref(database, `messages/${chatId}`);
         await remove(messagesRef);
+        existingMessages.clear();
     }
 }
 
