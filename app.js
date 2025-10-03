@@ -27,8 +27,7 @@ let blockedUsers = new Set();
 let userIP = null;
 let contextMenuTarget = null;
 let longPressTimer = null;
-let currentView = 'chats'; // chats, search, profile
-
+let currentView = 'chats';
 
 fetch('https://api.ipify.org?format=json')
     .then(response => response.json())
@@ -44,23 +43,12 @@ document.addEventListener('DOMContentLoaded', () => {
     setupEventListeners();
     setupMobileNav();
     setupChatContextMenu();
-
     handleViewportChange();
     window.addEventListener('resize', handleViewportChange);
     window.addEventListener('orientationchange', handleViewportChange);
-
     if (window.visualViewport) {
         window.visualViewport.addEventListener('resize', handleViewportChange);
     }
-    
-    //  window.addEventListener('resize', () => {
-    //     if (window.innerWidth > 768) {
-    //         document.getElementById('sidebar').classList.remove('hidden');
-    //         document.getElementById('chatArea').classList.remove('active');
-    //         document.getElementById('mobileNav').style.display = 'none';
-    //     }
-    // });
-    
 });
 
 function checkExistingUser() {
@@ -69,14 +57,12 @@ function checkExistingUser() {
         currentUser = JSON.parse(savedUser);
         isDeveloper = currentUser.isDeveloper || false;
         
-
         get(ref(database, `users/${currentUser.id}`)).then(snapshot => {
             if (snapshot.exists()) {
                 document.getElementById('loginModal').classList.add('hidden');
                 updateUserUI();
                 initApp();
             } else {
-
                 localStorage.removeItem('waveUser');
                 currentUser = null;
             }
@@ -85,7 +71,6 @@ function checkExistingUser() {
 }
 
 function setupEventListeners() {
-
     document.getElementById('loginTab').addEventListener('click', () => {
         document.getElementById('loginTab').classList.add('active');
         document.getElementById('registerTab').classList.remove('active');
@@ -99,7 +84,6 @@ function setupEventListeners() {
         document.getElementById('registerForm').style.display = 'block';
         document.getElementById('loginForm').style.display = 'none';
     });
-    
 
     document.getElementById('loginBtn').addEventListener('click', login);
     document.getElementById('registerBtn').addEventListener('click', register);
@@ -107,7 +91,6 @@ function setupEventListeners() {
     document.getElementById('registerUsername').addEventListener('input', (e) => {
         e.target.value = e.target.value.replace(/[^a-zA-Z0-9]/g, '');
     });
-    
 
     document.getElementById('loginPassword').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') login();
@@ -116,9 +99,10 @@ function setupEventListeners() {
         if (e.key === 'Enter') register();
     });
 
-
     document.getElementById('currentUserInfo').addEventListener('click', () => openProfile(currentUser.id));
-    document.getElementById('profileAvatar').addEventListener('click', toggleAvatarSelector);
+    document.getElementById('profileAvatar').addEventListener('click', (e) => {
+        e.preventDefault();
+    });
     document.getElementById('avatarUpload').addEventListener('change', uploadAvatar);
     document.getElementById('editProfileBtn').addEventListener('click', editProfile);
     document.getElementById('saveProfileBtn').addEventListener('click', saveProfile);
@@ -132,12 +116,6 @@ function setupEventListeners() {
     document.getElementById('cancelUsernameBtn').addEventListener('click', hideUsernameChange);
     document.getElementById('logoutProfileBtn').addEventListener('click', logout);
     document.getElementById('deleteAccountBtn').addEventListener('click', deleteAccount);
-
-    document.querySelectorAll('.avatar-option').forEach(option => {
-        option.addEventListener('click', () => {
-            if (isEditing) selectAvatar(parseInt(option.dataset.gradient));
-        });
-    });
 
     document.getElementById('sendBtn').addEventListener('click', sendMessage);
     document.getElementById('messageInput').addEventListener('keypress', (e) => {
@@ -160,32 +138,13 @@ function setupEventListeners() {
     document.getElementById('deleteMessageBtn').addEventListener('click', deleteMessage);
 
     document.getElementById('menuToggleBtn').addEventListener('click', toggleSidebar);
-    document.getElementById('backToChatBtn').addEventListener('click', () => {
-    if (window.innerWidth <= 768) {
-        document.getElementById('sidebar').classList.remove('hidden');
-        document.getElementById('chatArea').classList.remove('active');
-        
-        // Скрываем элементы чата
-        document.getElementById('chatHeader').style.display = 'none';
-        document.getElementById('messagesContainer').style.display = 'none';
-        document.getElementById('messageInputContainer').style.display = 'none';
-        document.getElementById('welcomeScreen').style.display = 'flex';
-        
-        // Показываем навигацию если есть чаты
-        const checkChats = async () => {
-            const chatsRef = ref(database, `userChats/${currentUser.id}`);
-            const snapshot = await get(chatsRef);
-            const chats = snapshot.val() || {};
-            
-            if (Object.keys(chats).length > 0) {
-                document.getElementById('mobileNav').classList.add('show');
-            }
-        };
-        checkChats();
-    } else {
-        closeSidebar();
-    }
-});
+    
+    document.getElementById('backToChatBtn').addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        backToChats();
+    });
+    
     document.getElementById('logoutBtn').addEventListener('click', logout);
     document.getElementById('clearChatBtn').addEventListener('click', clearCurrentChat);
     document.getElementById('chatUserInfo').addEventListener('click', () => {
@@ -202,6 +161,33 @@ function setupEventListeners() {
     document.addEventListener('click', hideMessageMenu);
 }
 
+function backToChats() {
+    if (window.innerWidth <= 768) {
+        document.getElementById('sidebar').classList.remove('hidden');
+        document.getElementById('chatArea').classList.remove('active');
+        document.getElementById('chatHeader').style.display = 'none';
+        document.getElementById('messagesContainer').style.display = 'none';
+        document.getElementById('messageInputContainer').style.display = 'none';
+        document.getElementById('welcomeScreen').style.display = 'flex';
+        
+        currentChatUser = null;
+        
+        if (messagesListener) {
+            messagesListener();
+            messagesListener = null;
+        }
+        
+        document.getElementById('mobileNav').style.display = 'flex';
+        
+        const messageInput = document.getElementById('messageInput');
+        if (messageInput) {
+            messageInput.blur();
+        }
+    } else {
+        closeSidebar();
+    }
+}
+
 function handleViewportChange() {
     if (window.innerWidth <= 768) {
         const vh = window.innerHeight * 0.01;
@@ -214,14 +200,16 @@ function setupMobileNav() {
         const mobileNav = document.getElementById('mobileNav');
 
         const checkChats = async () => {
-            const chatsRef = ref(database, `userChats/${currentUser.id}`);
-            const snapshot = await get(chatsRef);
-            const chats = snapshot.val() || {};
-            
-            if (Object.keys(chats).length > 0) {
-                mobileNav.classList.add('show');
-            } else {
-                mobileNav.classList.remove('show');
+            if (currentUser) {
+                const chatsRef = ref(database, `userChats/${currentUser.id}`);
+                const snapshot = await get(chatsRef);
+                const chats = snapshot.val() || {};
+                
+                if (Object.keys(chats).length > 0) {
+                    mobileNav.classList.add('show');
+                } else {
+                    mobileNav.classList.remove('show');
+                }
             }
         };
         
@@ -248,7 +236,6 @@ function setupMobileNav() {
 function showMobileView(view) {
     currentView = view;
     
-
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.remove('active');
     });
@@ -265,7 +252,6 @@ function showMobileView(view) {
 }
 
 function setupChatContextMenu() {
-
     document.addEventListener('contextmenu', (e) => {
         const chatItem = e.target.closest('.chat-item');
         if (chatItem) {
@@ -273,7 +259,6 @@ function setupChatContextMenu() {
             showChatContextMenu(e.pageX, e.pageY, chatItem);
         }
     });
-    
 
     document.addEventListener('touchstart', (e) => {
         const chatItem = e.target.closest('.chat-item');
@@ -281,6 +266,7 @@ function setupChatContextMenu() {
             longPressTimer = setTimeout(() => {
                 const touch = e.touches[0];
                 showChatContextMenu(touch.pageX, touch.pageY, chatItem);
+                e.preventDefault();
             }, 500);
         }
     });
@@ -292,12 +278,10 @@ function setupChatContextMenu() {
     document.addEventListener('touchmove', () => {
         clearTimeout(longPressTimer);
     });
-    
 
     document.getElementById('deleteChatBtn').addEventListener('click', deleteChat);
     document.getElementById('viewProfileBtn').addEventListener('click', viewChatProfile);
     
-    // Скрытие меню при клике вне его
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.chat-context-menu')) {
             document.getElementById('chatContextMenu').classList.remove('show');
@@ -309,7 +293,6 @@ function showChatContextMenu(x, y, chatItem) {
     const menu = document.getElementById('chatContextMenu');
     contextMenuTarget = chatItem;
     
-
     menu.style.left = x + 'px';
     menu.style.top = y + 'px';
 
@@ -332,11 +315,9 @@ async function deleteChat() {
     
     if (confirm('Удалить этот чат?')) {
         try {
-
             const chatRef = ref(database, `userChats/${currentUser.id}/${userId}`);
             await remove(chatRef);
             
-
             if (currentChatUser && currentChatUser.id === userId) {
                 currentChatUser = null;
                 document.getElementById('welcomeScreen').style.display = 'flex';
@@ -363,9 +344,7 @@ function viewChatProfile() {
     document.getElementById('chatContextMenu').classList.remove('show');
 }
 
-
 function hashPassword(password) {
-
     let hash = 0;
     for (let i = 0; i < password.length; i++) {
         const char = password.charCodeAt(i);
@@ -409,7 +388,6 @@ async function login() {
         isDeveloper = currentUser.isDeveloper || false;
         
         localStorage.setItem('waveUser', JSON.stringify(currentUser));
-        
 
         const userRef = ref(database, `users/${currentUser.id}`);
         await update(userRef, {
@@ -463,7 +441,6 @@ async function register() {
         errorDiv.style.display = 'block';
         return;
     }
-    
 
     if (password.length < 3) {
         errorDiv.textContent = 'Пароль должен содержать минимум 3 символа';
@@ -472,7 +449,6 @@ async function register() {
     }
     
     try {
-
         const usersRef = ref(database, 'users');
         const snapshot = await get(usersRef);
         const users = snapshot.val() || {};
@@ -593,7 +569,6 @@ async function setupOnlineStatus() {
 
 async function loadChats() {
     const chatsRef = ref(database, `userChats/${currentUser.id}`);
-    
 
     if (window.chatsListener) {
         off(chatsRef, window.chatsListener);
@@ -602,7 +577,6 @@ async function loadChats() {
     window.chatsListener = onValue(chatsRef, async (snapshot) => {
         const chats = snapshot.val() || {};
         const container = document.getElementById('chatsContainer');
-        
 
         const chatMap = new Map();
         
@@ -624,11 +598,9 @@ async function loadChats() {
                 });
             }
         }
-        
 
         const chatArray = Array.from(chatMap.values())
             .sort((a, b) => b.lastMessageTime - a.lastMessageTime);
-        
 
         container.innerHTML = '';
         chatArray.forEach(chat => {
@@ -640,209 +612,6 @@ async function loadChats() {
             document.getElementById('mobileNav').style.display = 'flex';
         }
     });
-}
-
-// 1. Добавляем улучшенные стили для мобильных устройств
-function addMobileStyles() {
-    const style = document.createElement('style');
-
-    const additionalStyle = document.createElement('style');
-        additionalStyle.textContent = `
-            @media (max-width: 768px) {
-                #app {
-                    height: calc(var(--vh, 1vh) * 100);
-                }
-                
-                #chatArea.active {
-                    height: calc(var(--vh, 1vh) * 100);
-                }
-            }
-        `;
-        document.head.appendChild(additionalStyle);
-    style.textContent = `
-        /* Фиксим позиционирование для мобильных */
-        @media (max-width: 768px) {
-            #app {
-                height: 100vh;
-                height: 100dvh;
-                overflow: hidden;
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-            }
-            
-            #sidebar {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 40px; /* Уменьшаем высоту нижней навигации */
-                z-index: 100;
-            }
-            
-            #chatArea {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                display: flex;
-                flex-direction: column;
-                height: 100vh;
-                height: 100dvh;
-            }
-            
-            #chatHeader {
-                flex-shrink: 0;
-                height: 60px;
-            }
-            
-            #messagesContainer {
-                flex: 1;
-                overflow-y: auto;
-                padding-bottom: 10px;
-                min-height: 0; /* Важно для flex */
-            }
-            
-            /* ВАЖНО: фиксим контейнер ввода сообщений */
-            #messageInputContainer {
-                position: relative;
-                background: var(--bg-primary);
-                border-top: 1px solid var(--border-color);
-                padding: 12px;
-                padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-                z-index: 100;
-                flex-shrink: 0;
-                display: block !important; /* Принудительно показываем */
-            }
-            
-            /* Увеличиваем поле ввода */
-            #messageInput {
-                width: 100%;
-                min-height: 42px !important; /* Увеличиваем минимальную высоту */
-                max-height: 120px;
-                font-size: 16px !important; /* Предотвращаем зум на iOS */
-                padding: 10px 12px !important;
-                box-sizing: border-box;
-                resize: none;
-                -webkit-appearance: none;
-                border-radius: 20px;
-            }
-            
-            .message-input-wrapper {
-                display: flex;
-                gap: 8px;
-                align-items: flex-end;
-                width: 100%;
-            }
-            
-            /* Увеличиваем кнопки */
-            #sendBtn, .input-btn {
-                width: 42px !important;
-                height: 42px !important;
-                min-width: 42px !important;
-                font-size: 20px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                border-radius: 50%;
-                flex-shrink: 0;
-            }
-            
-            /* Уменьшаем нижнюю навигацию */
-            #mobileNav {
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                height: 40px; /* Уменьшаем с 60px до 40px */
-                background: var(--bg-primary);
-                border-top: 1px solid var(--border-color);
-                display: none;
-                align-items: center;
-                justify-content: space-around;
-                z-index: 1000;
-                padding-bottom: env(safe-area-inset-bottom, 0px);
-            }
-            
-            #mobileNav.show {
-                display: flex;
-            }
-            
-            /* Уменьшаем элементы навигации */
-            .nav-item {
-                font-size: 10px !important; /* Очень маленький текст */
-                padding: 4px 8px;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                gap: 2px;
-            }
-            
-            .nav-item i {
-                font-size: 16px !important; /* Маленькие иконки */
-            }
-            
-            /* Когда чат открыт, скрываем навигацию */
-            #chatArea.active ~ #mobileNav {
-                display: none !important;
-            }
-            
-            /* Убираем welcomeScreen на мобильных когда чат активен */
-            #chatArea.active #welcomeScreen {
-                display: none !important;
-            }
-            
-            /* Показываем элементы чата когда активен */
-            #chatArea.active #chatHeader {
-                display: flex !important;
-            }
-            
-            #chatArea.active #messagesContainer {
-                display: flex !important;
-            }
-            
-            #chatArea.active #messageInputContainer {
-                display: block !important;
-            }
-            
-            /* Фиксим высоту при открытой клавиатуре */
-            #chatArea.active {
-                height: 100%;
-            }
-            
-            /* Дополнительные стили для лучшей работы */
-            .chat-item {
-                padding: 12px;
-            }
-            
-            .search-container {
-                padding: 10px;
-            }
-            
-            #searchInput {
-                font-size: 16px; /* Предотвращаем зум */
-            }
-        }
-        
-        /* Специальные стили для очень маленьких экранов */
-        @media (max-width: 380px) {
-            #mobileNav {
-                height: 35px;
-            }
-            
-            .nav-item {
-                font-size: 9px !important;
-            }
-            
-            .nav-item i {
-                font-size: 14px !important;
-            }
-        }
-    `;
-    document.head.appendChild(style);
 }
 
 function createChatItem(chat) {
@@ -863,7 +632,6 @@ function createChatItem(chat) {
     
     const time = chat.lastMessageTime ? formatTime(chat.lastMessageTime) : '';
     const unreadHtml = chat.unread > 0 ? `<div class="chat-item-unread">${chat.unread}</div>` : '';
-    
 
     let lastMessageDisplay = chat.lastMessage;
     if (chat.lastMessageSender === currentUser.id) {
@@ -960,13 +728,11 @@ async function openChat(userId, userData) {
     existingMessages.clear();
     document.getElementById('messagesContainer').innerHTML = '';
     
-    // Для мобильных устройств
     if (window.innerWidth <= 768) {
         document.getElementById('sidebar').classList.add('hidden');
         document.getElementById('chatArea').classList.add('active');
         document.getElementById('mobileNav').style.display = 'none';
         
-        // Принудительно показываем элементы чата
         document.getElementById('welcomeScreen').style.display = 'none';
         document.getElementById('chatHeader').style.display = 'flex';
         document.getElementById('messagesContainer').style.display = 'flex';
@@ -1002,25 +768,11 @@ async function openChat(userId, userData) {
     loadMessages(userId);
     
     document.querySelectorAll('.chat-item').forEach(item => item.classList.remove('active'));
-    
-
-    if (window.innerWidth <= 768) {
-        setTimeout(() => {
-            const input = document.getElementById('messageInput');
-            if (input) {
-                input.focus();
-
-                scrollToBottom();
-            }
-        }, 300);
-    }
 }
 
 async function markAsRead(userId) {
     const chatRef = ref(database, `userChats/${currentUser.id}/${userId}`);
-    await update(chatRef, { unread: 0 }).catch(() => {
-
-    });
+    await update(chatRef, { unread: 0 }).catch(() => {});
 }
 
 function loadMessages(userId) {
@@ -1130,7 +882,6 @@ async function sendMessage() {
     const text = input.value.trim();
     
     if (!text && !currentReply) return;
-    
 
     const sendBtn = document.getElementById('sendBtn');
     if (sendBtn.disabled) return;
@@ -1159,7 +910,6 @@ async function sendMessage() {
 
         const userChatRef = ref(database, `userChats/${currentUser.id}/${currentChatUser.id}`);
         const otherUserChatRef = ref(database, `userChats/${currentChatUser.id}/${currentUser.id}`);
-        
 
         await set(userChatRef, {
             lastMessage: text,
@@ -1167,7 +917,6 @@ async function sendMessage() {
             lastMessageSender: currentUser.id,
             unread: 0
         });
-        
 
         const otherSnapshot = await get(otherUserChatRef);
         const unreadCount = otherSnapshot.exists() ? (otherSnapshot.val().unread || 0) + 1 : 1;
@@ -1181,12 +930,6 @@ async function sendMessage() {
         
         input.value = '';
         input.style.height = 'auto';
-
-         if (window.innerWidth <= 768) {
-            setTimeout(() => {
-                input.focus();
-            }, 10);
-        }
         
     } catch (error) {
         console.error('Error sending message:', error);
@@ -1272,15 +1015,16 @@ async function updateLastMessage(text) {
         const userChatData = {
             lastMessage: text,
             lastMessageTime: Date.now(),
+            lastMessageSender: currentUser.id,
             unread: 0
         };
         
         const otherUserChatData = {
             lastMessage: text,
             lastMessageTime: Date.now(),
+            lastMessageSender: currentUser.id,
             unread: 1
         };
-        
 
         const otherUserChatRef = ref(database, `userChats/${currentChatUser.id}/${currentUser.id}`);
         try {
@@ -1289,10 +1033,7 @@ async function updateLastMessage(text) {
                 const data = snapshot.val();
                 otherUserChatData.unread = (data.unread || 0) + 1;
             }
-        } catch (e) {
-
-        }
-        
+        } catch (e) {}
 
         const userChatRef = ref(database, `userChats/${currentUser.id}/${currentChatUser.id}`);
         await set(userChatRef, userChatData);
@@ -1337,7 +1078,6 @@ async function openProfile(userId) {
         } else {
             usernameDiv.style.display = 'none';
         }
-        
 
         const statusRef = ref(database, `users/${userId}`);
         onValue(statusRef, (snapshot) => {
@@ -1352,7 +1092,6 @@ async function openProfile(userId) {
                 } else {
                     lastSeenDiv.style.display = 'none';
                 }
-                
 
                 const ipDiv = document.getElementById('profileIp');
                 if (isDeveloper && !isOwnProfile && user.ip) {
@@ -1377,14 +1116,13 @@ async function openProfile(userId) {
         bioInput.style.display = 'none';
         
         document.getElementById('uploadLabel').style.display = 'none';
-        document.getElementById('avatarSelector').classList.remove('show');
+        document.getElementById('avatarSelector').style.display = 'none';
         document.getElementById('editProfileBtn').style.display = isOwnProfile ? 'block' : 'none';
         document.getElementById('changeUsernameBtn').style.display = isOwnProfile ? 'block' : 'none';
         document.getElementById('saveProfileBtn').style.display = 'none';
         document.getElementById('messageUserBtn').style.display = !isOwnProfile ? 'block' : 'none';
         document.getElementById('logoutProfileBtn').style.display = isOwnProfile ? 'block' : 'none';
         document.getElementById('deleteAccountBtn').style.display = isOwnProfile ? 'block' : 'none';
-        
 
         const blockBtn = document.getElementById('blockUserBtn');
         if (!isOwnProfile) {
@@ -1413,7 +1151,6 @@ async function deleteAccount() {
         try {
             const userRef = ref(database, `users/${currentUser.id}`);
             await remove(userRef);
-            
 
             const userChatsRef = ref(database, `userChats/${currentUser.id}`);
             await remove(userChatsRef);
@@ -1510,27 +1247,22 @@ async function toggleBlockUser() {
     const isBlocked = blockedUsers.has(userId);
     
     if (isBlocked) {
-
         const blockRef = ref(database, `users/${currentUser.id}/blockedUsers/${userId}`);
         await remove(blockRef);
         blockedUsers.delete(userId);
         alert('Пользователь разблокирован');
     } else {
-
         const blockRef = ref(database, `users/${currentUser.id}/blockedUsers/${userId}`);
         await set(blockRef, true);
         blockedUsers.add(userId);
         alert('Пользователь заблокирован');
     }
-    
 
     const blockBtn = document.getElementById('blockUserBtn');
     blockBtn.textContent = isBlocked ? '🚫 Заблокировать' : '✅ Разблокировать';
     blockBtn.className = isBlocked ? 'btn-profile btn-block' : 'btn-profile btn-unblock';
-    
 
     loadChats();
-    
 
     if (!isBlocked && currentChatUser && currentChatUser.id === userId) {
         currentChatUser = null;
@@ -1545,7 +1277,6 @@ function editProfile() {
     isEditing = true;
     
     document.getElementById('uploadLabel').style.display = 'block';
-    document.getElementById('avatarSelector').classList.add('show');
     
     const bioDiv = document.getElementById('profileBio');
     const bioInput = document.getElementById('bioInput');
@@ -1559,21 +1290,11 @@ function editProfile() {
 }
 
 function toggleAvatarSelector() {
-    if (isEditing) {
-        const selector = document.getElementById('avatarSelector');
-        selector.classList.toggle('show');
-    }
+    return false;
 }
 
 function selectAvatar(avatarNum) {
-    if (!isEditing) return;
-    
-    selectedAvatar = avatarNum;
-    selectedAvatarImage = null;
-    const avatar = document.getElementById('profileAvatar');
-    const text = document.getElementById('profileName').textContent;
-    avatar.innerHTML = `<span id="profileAvatarText">${text.charAt(0).toUpperCase()}</span>`;
-    avatar.className = `profile-avatar-large avatar-gradient-${avatarNum}`;
+    return false;
 }
 
 function uploadAvatar(event) {
@@ -1631,9 +1352,6 @@ async function saveProfile() {
         const bioInput = document.getElementById('bioInput');
         currentUser.bio = bioInput.value.trim();
         
-        if (selectedAvatar) {
-            currentUser.avatar = selectedAvatar;
-        }
         if (selectedAvatarImage !== null) {
             currentUser.avatarImage = selectedAvatarImage;
         }
@@ -1658,7 +1376,6 @@ async function saveProfile() {
         bioInput.style.display = 'none';
         
         document.getElementById('uploadLabel').style.display = 'none';
-        document.getElementById('avatarSelector').classList.remove('show');
         document.getElementById('editProfileBtn').style.display = 'block';
         document.getElementById('changeUsernameBtn').style.display = 'block';
         document.getElementById('saveProfileBtn').style.display = 'none';
@@ -1672,6 +1389,7 @@ async function saveProfile() {
         alert('Ошибка сохранения профиля. Попробуйте еще раз.');
     }
 }
+
 function closeProfile() {
     document.getElementById('profileModal').classList.remove('show');
     isEditing = false;
