@@ -10,11 +10,25 @@
     <div class="login-modal" id="loginModal">
         <div class="login-box">
             <h1 class="login-title">👋 Wave Chat</h1>
-            <p class="login-subtitle">Регистрация в чате</p>
-            <input type="text" class="input-field" id="usernameInput" placeholder="Username (только англ. буквы и цифры)" maxlength="20" autocomplete="off">
-            <input type="text" class="input-field" id="nameInput" placeholder="Ваше имя" maxlength="30" autocomplete="off">
-            <div class="login-error" id="loginError"></div>
-            <button class="btn-login" id="loginBtn">Войти в чат</button>
+            <div class="login-tabs">
+                <button class="login-tab active" id="loginTab">Вход</button>
+                <button class="login-tab" id="registerTab">Регистрация</button>
+            </div>
+            
+            <div class="login-form" id="loginForm">
+                <input type="text" class="input-field" id="loginUsername" placeholder="Username" maxlength="20" autocomplete="off">
+                <input type="password" class="input-field" id="loginPassword" placeholder="Пароль" autocomplete="off">
+                <div class="login-error" id="loginError"></div>
+                <button class="btn-login" id="loginBtn">Войти</button>
+            </div>
+            
+            <div class="register-form" id="registerForm" style="display: none;">
+                <input type="text" class="input-field" id="registerName" placeholder="Ваше имя" maxlength="30" autocomplete="off">
+                <input type="text" class="input-field" id="registerUsername" placeholder="Username (только англ. буквы и цифры)" maxlength="20" autocomplete="off">
+                <input type="password" class="input-field" id="registerPassword" placeholder="Пароль (минимум 3 цифры)" autocomplete="off">
+                <div class="login-error" id="registerError"></div>
+                <button class="btn-login" id="registerBtn">Зарегистрироваться</button>
+            </div>
         </div>
     </div>
 
@@ -38,13 +52,11 @@
                 </label>
                 <div class="profile-name">
                     <span id="profileName">User</span>
-                    <span class="developer-badge" id="devBadge" style="display: none;">DEVELOPER</span>
                 </div>
                 <div class="profile-username" id="profileUsername">@username</div>
                 <div class="profile-status" id="profileStatus">В сети</div>
                 <div class="profile-last-seen" id="profileLastSeen"></div>
                 <div class="profile-ip" id="profileIp" style="display: none;"></div>
-
                 <div class="profile-bio" id="profileBio"></div>
                 <textarea class="bio-input" id="bioInput" placeholder="Расскажите о себе..." style="display: none;" maxlength="150"></textarea>
             </div>
@@ -58,23 +70,24 @@
             </div>
 
             <div class="username-change-container" id="usernameChangeContainer" style="display: none;">
-            <input type="text" class="input-field" id="newUsernameInput" placeholder="Новый username" maxlength="20">
-            <div class="username-error" id="usernameError" style="display: none;"></div>
-            <div class="username-buttons">
-                <button class="btn-profile btn-save" id="saveUsernameBtn">💾 Сохранить</button>
-                <button class="btn-profile btn-cancel" id="cancelUsernameBtn">Отмена</button>
+                <input type="text" class="input-field" id="newUsernameInput" placeholder="Новый username" maxlength="20">
+                <div class="username-error" id="usernameError" style="display: none;"></div>
+                <div class="username-buttons">
+                    <button class="btn-profile btn-save" id="saveUsernameBtn">💾 Сохранить</button>
+                    <button class="btn-profile btn-cancel" id="cancelUsernameBtn">Отмена</button>
+                </div>
             </div>
-        </div>
 
             <div class="profile-actions">
                 <button class="btn-profile btn-edit" id="editProfileBtn" style="display: none;">✏️ Редактировать</button>
                 <button class="btn-profile btn-save" id="saveProfileBtn" style="display: none;">💾 Сохранить</button>
-                <button class="btn-profile btn-message" id="messageUserBtn" style="display: none;">💬 Написать</button>
-                <button class="btn-profile btn-kick" id="kickUserBtn" style="display: none;">🚫 Кикнуть</button>
-                <button class="btn-profile btn-cancel" id="closeProfileBtn">Закрыть</button>
-                <button class="btn-profile btn-block" id="blockUserBtn" style="display: none;">🚫 Заблокировать</button>
                 <button class="btn-profile btn-change-username" id="changeUsernameBtn" style="display: none;">✏️ Сменить username</button>
-
+                <button class="btn-profile btn-message" id="messageUserBtn" style="display: none;">💬 Написать</button>
+                <button class="btn-profile btn-block" id="blockUserBtn" style="display: none;">🚫 Заблокировать</button>
+                <button class="btn-profile btn-kick" id="kickUserBtn" style="display: none;">🚫 Кикнуть</button>
+                <button class="btn-profile btn-logout" id="logoutProfileBtn" style="display: none;">🚪 Выйти</button>
+                <button class="btn-profile btn-delete" id="deleteAccountBtn" style="display: none;">🗑️ Удалить аккаунт</button>
+                <button class="btn-profile btn-cancel" id="closeProfileBtn">Закрыть</button>
             </div>
         </div>
     </div>
