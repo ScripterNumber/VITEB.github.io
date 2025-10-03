@@ -998,7 +998,6 @@
             align-items: center;
             margin-bottom: 5px;
         }
-
         .reply-to {
             font-size: 12px;
             color: var(--primary);
@@ -1416,7 +1415,76 @@
         let editingUserId = null;
         let currentReply = null;
         let selectedMessage = null;
-        let shareTimeout = null;
+
+        // Инициализация при загрузке
+        document.addEventListener('DOMContentLoaded', () => {
+            checkExistingUser();
+            setupEventListeners();
+        });
+
+        function checkExistingUser() {
+            const savedUser = localStorage.getItem('waveUser');
+            if (savedUser) {
+                currentUser = JSON.parse(savedUser);
+                isDeveloper = currentUser.isDeveloper || false;
+                document.getElementById('loginModal').classList.add('hidden');
+                updateUserUI();
+                initChat();
+            }
+        }
+
+        function setupEventListeners() {
+            // Login
+            document.getElementById('loginBtn').addEventListener('click', login);
+            document.getElementById('loginInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') login();
+            });
+
+            // Profile
+            document.getElementById('currentUserInfo').addEventListener('click', () => openProfile('current'));
+            document.getElementById('profileAvatar').addEventListener('click', toggleAvatarSelector);
+            document.getElementById('avatarUpload').addEventListener('change', uploadAvatar);
+            document.getElementById('saveProfileBtn').addEventListener('click', saveProfile);
+            document.getElementById('closeProfileBtn').addEventListener('click', closeProfile);
+
+            // Avatar options
+            document.querySelectorAll('.avatar-option').forEach(option => {
+                option.addEventListener('click', () => {
+                    selectAvatar(parseInt(option.dataset.gradient));
+                });
+            });
+
+            // Messages
+            document.getElementById('sendBtn').addEventListener('click', sendMessage);
+            document.getElementById('messageInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+
+            // Media upload
+            document.getElementById('mediaUpload').addEventListener('change', handleMediaUpload);
+
+            // Reply
+            document.getElementById('cancelReplyBtn').addEventListener('click', cancelReply);
+            document.getElementById('replyMessageBtn').addEventListener('click', replyToMessage);
+            document.getElementById('copyMessageBtn').addEventListener('click', copyMessage);
+
+            // Navigation
+            document.getElementById('menuToggleBtn').addEventListener('click', toggleSidebar);
+            document.getElementById('backToChatBtn').addEventListener('click', closeSidebar);
+            document.getElementById('logoutBtn').addEventListener('click', logout);
+            document.getElementById('shareBtn').addEventListener('click', shareChat);
+            document.getElementById('clearChatDevBtn').addEventListener('click', clearChat);
+
+            // Group info
+            document.getElementById('chatTitle').addEventListener('click', openGroupInfo);
+            document.getElementById('closeGroupInfoBtn').addEventListener('click', closeGroupInfo);
+
+            // Hide menu on click outside
+            document.addEventListener('click', hideMessageMenu);
+        }
 
         async function login() {
             const input = document.getElementById('loginInput');
@@ -1424,7 +1492,14 @@
             const errorDiv = document.getElementById('loginError');
             
             if (!name) {
-                alert('Пожалуйста, введите ваше имя');
+                errorDiv.textContent = 'Пожалуйста, введите ваше имя';
+                errorDiv.style.display = 'block';
+                return;
+            }
+
+            if (name.length < 2) {
+                errorDiv.textContent = 'Имя должно содержать минимум 2 символа';
+                errorDiv.style.display = 'block';
                 return;
             }
 
@@ -1438,6 +1513,7 @@
                 );
 
                 if (nameExists) {
+                    errorDiv.textContent = 'Это имя уже занято!';
                     errorDiv.style.display = 'block';
                     return;
                 }
@@ -1469,12 +1545,21 @@
 
                 onDisconnect(userRef).remove();
 
+                // Send join message
+                const messagesRef = ref(database, `messages/${currentRoom}`);
+                await push(messagesRef, {
+                    type: 'system',
+                    text: `${name} присоединился к чату`,
+                    timestamp: serverTimestamp()
+                });
+
                 document.getElementById('loginModal').classList.add('hidden');
                 updateUserUI();
                 initChat();
             } catch (error) {
                 console.error('Login error:', error);
-                alert('Ошибка входа. Попробуйте еще раз.');
+                errorDiv.textContent = 'Ошибка входа. Попробуйте еще раз.';
+                errorDiv.style.display = 'block';
             }
         }
 
@@ -1520,32 +1605,32 @@
                 uploadLabel.style.display = 'block';
                 devBadge.style.display = isDeveloper ? 'inline-block' : 'none';
             } else {
-                const userRef = ref(database, `users/${userId}`);
-                const snapshot = await get(userRef);
-                const user = snapshot.val();
-                
-                if (user) {
-                    document.getElementById('profileName').textContent = user.name;
-                    const avatar = document.getElementById('profileAvatar');
+                try {
+                    const userRef = ref(database, `users/${userId}`);
+                    const snapshot = await get(userRef);
+                    const user = snapshot.val();
                     
-                    if (user.avatarImage) {
-                        avatar.innerHTML = `<img src="${user.avatarImage}" alt="">`;
-                        avatar.className = 'profile-avatar-large';
-                    } else {
-                        avatar.innerHTML = `<span id="profileAvatarText">${user.name.charAt(0).toUpperCase()}</span>`;
-                        avatar.className = `profile-avatar-large avatar-gradient-${user.avatar || 1}`;
+                    if (user) {
+                        document.getElementById('profileName').textContent = user.name;
+                        const avatar = document.getElementById('profileAvatar');
+                        
+                        if (user.avatarImage) {
+                            avatar.innerHTML = `<img src="${user.avatarImage}" alt="">`;
+                            avatar.className = 'profile-avatar-large';
+                        } else {
+                            avatar.innerHTML = `<span id="profileAvatarText">${user.name.charAt(0).toUpperCase()}</span>`;
+                            avatar.className = `profile-avatar-large avatar-gradient-${user.avatar || 1}`;
+                        }
+                        
+                        document.getElementById('profileStatus').textContent = user.online ? 'В сети' : 'Не в сети';
+                        document.getElementById('saveProfileBtn').style.display = 'none';
+                        document.getElementById('avatarSelector').classList.remove('show');
+                        
+                        uploadLabel.style.display = 'none';
+                        devBadge.style.display = user.isDeveloper ? 'inline-block' : 'none';
                     }
-                    
-                    document.getElementById('profileStatus').textContent = user.online ? 'В сети' : 'Не в сети';
-                    document.getElementById('saveProfileBtn').style.display = 'none';
-                    document.getElementById('avatarSelector').classList.remove('show');
-                    
-                    uploadLabel.style.display = isDeveloper ? 'block' : 'none';
-                    devBadge.style.display = user.isDeveloper ? 'inline-block' : 'none';
-                    
-                    if (isDeveloper) {
-                        editingUserId = userId;
-                    }
+                } catch (error) {
+                    console.error('Error loading profile:', error);
                 }
             }
             
@@ -1557,7 +1642,7 @@
         }
 
         function toggleAvatarSelector() {
-            if (editingUserId === currentUser?.id || isDeveloper) {
+            if (editingUserId === currentUser?.id) {
                 const selector = document.getElementById('avatarSelector');
                 selector.classList.toggle('show');
             }
@@ -1576,6 +1661,11 @@
         function uploadAvatar(event) {
             const file = event.target.files[0];
             if (!file) return;
+
+            if (file.size > 5 * 1024 * 1024) {
+                alert('Файл слишком большой. Максимальный размер: 5MB');
+                return;
+            }
 
             const reader = new FileReader();
             reader.onload = function(e) {
@@ -1612,48 +1702,38 @@
                     avatar.className = 'profile-avatar-large';
                     document.getElementById('saveProfileBtn').style.display = 'block';
                 };
+                img.onerror = function() {
+                    alert('Ошибка загрузки изображения');
+                };
                 img.src = e.target.result;
             };
             reader.readAsDataURL(file);
         }
 
         async function saveProfile() {
-            const targetUser = editingUserId === currentUser.id ? currentUser : null;
-            
-            if (targetUser) {
-                targetUser.avatar = selectedAvatar;
-                targetUser.avatarImage = selectedAvatarImage;
+            try {
+                currentUser.avatar = selectedAvatar;
+                if (selectedAvatarImage) {
+                    currentUser.avatarImage = selectedAvatarImage;
+                }
                 
-                const userRef = ref(database, `users/${targetUser.id}`);
+                const userRef = ref(database, `users/${currentUser.id}`);
                 await set(userRef, {
-                    name: targetUser.name,
+                    name: currentUser.name,
                     avatar: selectedAvatar,
-                    avatarImage: selectedAvatarImage,
+                    avatarImage: currentUser.avatarImage,
                     online: true,
-                    isDeveloper: targetUser.isDeveloper || false,
+                    isDeveloper: currentUser.isDeveloper || false,
                     lastSeen: serverTimestamp()
                 });
                 
-                localStorage.setItem('waveUser', JSON.stringify(targetUser));
+                localStorage.setItem('waveUser', JSON.stringify(currentUser));
                 updateUserUI();
-            } else if (isDeveloper && editingUserId) {
-                const userRef = ref(database, `users/${editingUserId}`);
-                const snapshot = await get(userRef);
-                const user = snapshot.val();
-                
-                if (user) {
-                    await set(userRef, {
-                        name: user.name,
-                        avatar: selectedAvatar,
-                        avatarImage: selectedAvatarImage,
-                        online: user.online,
-                        isDeveloper: user.isDeveloper || false,
-                        lastSeen: user.lastSeen
-                    });
-                }
+                closeProfile();
+            } catch (error) {
+                console.error('Error saving profile:', error);
+                alert('Ошибка сохранения профиля');
             }
-            
-            closeProfile();
         }
 
         function closeProfile() {
@@ -1663,7 +1743,7 @@
         }
 
         function initChat() {
-            loadChats();
+            loadUsers();
             loadMessages();
             
             if (isDeveloper) {
@@ -1671,7 +1751,7 @@
             }
         }
 
-        async function loadChats() {
+        async function loadUsers() {
             try {
                 const usersRef = ref(database, 'users');
                 
@@ -1687,9 +1767,15 @@
                         </div>
                     `;
                     
-                    let chatsHtml = '<div id="chatsList"><div class="users-title">Пользователи</div>';
+                    let chatsHtml = '<div id="chatsList"><div class="users-title">Пользователи онлайн</div>';
                     
-                    Object.entries(users).forEach(([userId, user]) => {
+                    const sortedUsers = Object.entries(users).sort((a, b) => {
+                        if (a[1].online && !b[1].online) return -1;
+                        if (!a[1].online && b[1].online) return 1;
+                        return 0;
+                    });
+                    
+                    sortedUsers.forEach(([userId, user]) => {
                         if (userId !== currentUser.id) {
                             let avatarHtml;
                             if (user.avatarImage) {
@@ -1701,7 +1787,7 @@
                             const statusText = user.online ? 'В сети' : 'Не в сети';
                             
                             chatsHtml += `
-                                <div class="user-item" data-username="${user.name.toLowerCase()}">
+                                <div class="user-item" data-username="${user.name.toLowerCase()}" data-userid="${userId}">
                                     ${avatarHtml}
                                     <div class="user-item-name">
                                         ${user.name}${user.isDeveloper ? ' <span class="developer-badge">DEV</span>' : ''}
@@ -1718,21 +1804,429 @@
                     const onlineCount = Object.values(users).filter(u => u.online).length;
                     document.getElementById('onlineCount').textContent = `${onlineCount} участников онлайн`;
                     
+                    // Update group members count
+                    document.getElementById('groupMembersCount').textContent = `${onlineCount} участников`;
+                    
+                    // Update group members list
+                    updateGroupMembersList(users);
+                    
                     const searchInput = document.getElementById('searchUser');
                     if (searchInput) {
-                        searchInput.addEventListener('input', (e) => filterChats(e.target.value));
+                        searchInput.addEventListener('input', (e) => filterUsers(e.target.value));
                     }
                     
                     const userItems = document.querySelectorAll('.user-item');
                     userItems.forEach(item => {
                         item.addEventListener('click', () => {
-                            const userName = item.querySelector('.user-item-name').textContent.split('\n')[0].trim();
-                            const userId = Object.entries(users).find(([id, u]) => u.name === userName)?.[0];
+                            const userId = item.dataset.userid;
                             if (userId) {
-                                openUserProfile(userId);
+                                openProfile(userId);
                             }
                         });
                     });
                 });
             } catch (error) {
-                console.error('Error loading 
+                console.error('Error loading users:', error);
+            }
+        }
+
+        function filterUsers(searchTerm) {
+            const userItems = document.querySelectorAll('.user-item');
+            const term = searchTerm.toLowerCase();
+            
+            userItems.forEach(item => {
+                const username = item.dataset.username;
+                if (username.includes(term)) {
+                    item.style.display = 'flex';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        function updateGroupMembersList(users) {
+            const membersList = document.getElementById('groupMembersList');
+            let html = '';
+            
+            Object.entries(users).forEach(([userId, user]) => {
+                if (user.online) {
+                    let avatarHtml;
+                    if (user.avatarImage) {
+                        avatarHtml = `<div class="member-avatar"><img src="${user.avatarImage}" alt=""></div>`;
+                    } else {
+                        avatarHtml = `<div class="member-avatar avatar-gradient-${user.avatar || 1}">${user.name.charAt(0).toUpperCase()}</div>`;
+                    }
+                    
+                    html += `
+                        <div class="member-item">
+                            ${avatarHtml}
+                            <div class="member-info">
+                                <div class="member-name">${user.name}${user.isDeveloper ? ' <span class="developer-badge">DEV</span>' : ''}</div>
+                                <div class="member-status">В сети</div>
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+            
+            membersList.innerHTML = html;
+        }
+
+        async function loadMessages() {
+            const container = document.getElementById('messagesContainer');
+            const messagesRef = ref(database, `messages/${currentRoom}`);
+            
+            onValue(messagesRef, (snapshot) => {
+                const messages = snapshot.val() || {};
+                container.innerHTML = '';
+                
+                const sortedMessages = Object.entries(messages).sort((a, b) => {
+                    return (a[1].timestamp || 0) - (b[1].timestamp || 0);
+                });
+                
+                sortedMessages.forEach(([msgId, msg]) => {
+                    displayMessage(msg, msgId);
+                });
+                
+                scrollToBottom();
+            });
+        }
+
+        function displayMessage(msg, msgId) {
+            const container = document.getElementById('messagesContainer');
+            
+            if (msg.type === 'system') {
+                const systemMsg = document.createElement('div');
+                systemMsg.className = 'system-message';
+                systemMsg.textContent = msg.text;
+                container.appendChild(systemMsg);
+                return;
+            }
+            
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message';
+            messageDiv.dataset.messageId = msgId;
+            
+            if (msg.userId === currentUser.id) {
+                messageDiv.classList.add('own');
+            }
+            
+            let avatarHtml;
+            if (msg.userAvatar && msg.userAvatar.includes('data:image')) {
+                avatarHtml = `<img src="${msg.userAvatar}" alt="">`;
+            } else {
+                avatarHtml = msg.userName ? msg.userName.charAt(0).toUpperCase() : '?';
+            }
+            
+            let replyHtml = '';
+            if (msg.replyTo) {
+                replyHtml = `
+                    <div class="message-reply">
+                        <div class="message-reply-author">${msg.replyTo.author}</div>
+                        <div class="message-reply-text">${msg.replyTo.text}</div>
+                    </div>
+                `;
+            }
+            
+            let imageHtml = '';
+            if (msg.image) {
+                imageHtml = `<img class="message-image" src="${msg.image}" onclick="openImageViewer('${msg.image}')" alt="">`;
+            }
+            
+            const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
+            
+            messageDiv.innerHTML = `
+                <div class="message-avatar avatar-gradient-${msg.userAvatarGradient || 1}" onclick="openProfile('${msg.userId}')">
+                    ${avatarHtml}
+                </div>
+                <div class="message-content">
+                    <div class="message-author">${msg.userName || 'Unknown'}${msg.isDeveloper ? ' <span class="developer-badge">DEV</span>' : ''}</div>
+                    <div class="message-bubble" oncontextmenu="showMessageMenu(event, '${msgId}', '${msg.userName}', '${escapeHtml(msg.text)}')">
+                        ${replyHtml}
+                        <div class="message-text">${escapeHtml(msg.text)}</div>
+                        ${imageHtml}
+                        <div class="message-time">${time}</div>
+                    </div>
+                </div>
+            `;
+            
+            container.appendChild(messageDiv);
+        }
+
+        function escapeHtml(text) {
+            const map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const text = input.value.trim();
+            
+            if (!text && !currentReply) return;
+            
+            try {
+                const messagesRef = ref(database, `messages/${currentRoom}`);
+                const messageData = {
+                    userId: currentUser.id,
+                    userName: currentUser.name,
+                    userAvatarGradient: currentUser.avatar,
+                    userAvatar: currentUser.avatarImage || null,
+                    text: text,
+                    timestamp: serverTimestamp(),
+                    isDeveloper: currentUser.isDeveloper || false
+                };
+                
+                if (currentReply) {
+                    messageData.replyTo = currentReply;
+                    cancelReply();
+                }
+                
+                await push(messagesRef, messageData);
+                input.value = '';
+                input.style.height = 'auto';
+            } catch (error) {
+                console.error('Error sending message:', error);
+                alert('Ошибка отправки сообщения');
+            }
+        }
+
+        async function handleMediaUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            if (file.size > 10 * 1024 * 1024) {
+                alert('Файл слишком большой. Максимальный размер: 10MB');
+                return;
+            }
+            
+            if (!file.type.startsWith('image/')) {
+                alert('Поддерживаются только изображения');
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                const img = new Image();
+                img.onload = async function() {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    const maxSize = 1200;
+                    
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    if (width > height) {
+                        if (width > maxSize) {
+                            height *= maxSize / width;
+                            width = maxSize;
+                        }
+                    } else {
+                        if (height > maxSize) {
+                            width *= maxSize / height;
+                            height = maxSize;
+                        }
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    
+                    try {
+                        const messagesRef = ref(database, `messages/${currentRoom}`);
+                        await push(messagesRef, {
+                            userId: currentUser.id,
+                            userName: currentUser.name,
+                            userAvatarGradient: currentUser.avatar,
+                            userAvatar: currentUser.avatarImage || null,
+                            text: '📷 Изображение',
+                            image: dataUrl,
+                            timestamp: serverTimestamp(),
+                            isDeveloper: currentUser.isDeveloper || false
+                        });
+                    } catch (error) {
+                        console.error('Error uploading image:', error);
+                        alert('Ошибка загрузки изображения');
+                    }
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+            
+            event.target.value = '';
+        }
+
+        window.showMessageMenu = function(event, msgId, author, text) {
+            event.preventDefault();
+            const menu = document.getElementById('messageMenu');
+            
+            selectedMessage = {
+                id: msgId,
+                author: author,
+                text: text
+            };
+            
+            menu.style.left = event.pageX + 'px';
+            menu.style.top = event.pageY + 'px';
+            menu.classList.add('show');
+            
+            event.stopPropagation();
+        }
+
+        function hideMessageMenu() {
+            document.getElementById('messageMenu').classList.remove('show');
+        }
+
+        function copyMessage() {
+            if (selectedMessage) {
+                navigator.clipboard.writeText(selectedMessage.text).then(() => {
+                    console.log('Message copied');
+                }).catch(err => {
+                    console.error('Error copying message:', err);
+                });
+            }
+            hideMessageMenu();
+        }
+
+        function replyToMessage() {
+            if (selectedMessage) {
+                currentReply = {
+                    author: selectedMessage.author,
+                    text: selectedMessage.text
+                };
+                
+                document.getElementById('replyToName').textContent = selectedMessage.author;
+                document.getElementById('replyText').textContent = selectedMessage.text;
+                document.getElementById('replyContainer').classList.add('show');
+                document.getElementById('messageInput').focus();
+            }
+            hideMessageMenu();
+        }
+
+        function cancelReply() {
+            currentReply = null;
+            document.getElementById('replyContainer').classList.remove('show');
+        }
+
+        window.openImageViewer = function(imageSrc) {
+            document.getElementById('viewerImage').src = imageSrc;
+            document.getElementById('imageViewer').classList.add('show');
+        }
+
+        window.closeImageViewer = function(event) {
+            if (!event || event.target === event.currentTarget) {
+                document.getElementById('imageViewer').classList.remove('show');
+            }
+        }
+
+        function openGroupInfo() {
+            document.getElementById('groupInfoModal').classList.add('show');
+        }
+
+        function closeGroupInfo() {
+            document.getElementById('groupInfoModal').classList.remove('show');
+        }
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('open');
+        }
+
+        function closeSidebar() {
+            document.getElementById('sidebar').classList.remove('open');
+        }
+
+        async function logout() {
+            if (confirm('Вы уверены, что хотите выйти?')) {
+                try {
+                    if (currentUser) {
+                        const userRef = ref(database, `users/${currentUser.id}`);
+                        await remove(userRef);
+                        
+                        const messagesRef = ref(database, `messages/${currentRoom}`);
+                        await push(messagesRef, {
+                            type: 'system',
+                            text: `${currentUser.name} покинул чат`,
+                            timestamp: serverTimestamp()
+                        });
+                    }
+                    
+                    localStorage.removeItem('waveUser');
+                    location.reload();
+                } catch (error) {
+                    console.error('Error logging out:', error);
+                    localStorage.removeItem('waveUser');
+                    location.reload();
+                }
+            }
+        }
+
+        async function shareChat() {
+            const url = window.location.href;
+            
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: 'Wave Chat',
+                        text: 'Присоединяйся к чату!',
+                        url: url
+                    });
+                } catch (err) {
+                    copyToClipboard(url);
+                }
+            } else {
+                copyToClipboard(url);
+            }
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = document.getElementById('shareBtn');
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '✅';
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                }, 2000);
+            }).catch(err => {
+                console.error('Error copying:', err);
+            });
+        }
+
+        async function clearChat() {
+            if (isDeveloper && confirm('Удалить все сообщения? Это действие нельзя отменить!')) {
+                try {
+                    const messagesRef = ref(database, `messages/${currentRoom}`);
+                    await remove(messagesRef);
+                } catch (error) {
+                    console.error('Error clearing chat:', error);
+                }
+            }
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('messagesContainer');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Auto-resize textarea
+        document.getElementById('messageInput').addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
+        });
+        
+        // Set initial vh
+        document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
+    </script>
+</body>
+</html>
