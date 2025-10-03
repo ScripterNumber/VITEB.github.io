@@ -25,6 +25,9 @@ let isEditing = false;
 let existingMessages = new Set();
 let blockedUsers = new Set();
 let userIP = null;
+let contextMenuTarget = null;
+let longPressTimer = null;
+let currentView = 'chats'; // chats, search, profile
 
 // Получаем IP адрес пользователя
 fetch('https://api.ipify.org?format=json')
@@ -39,6 +42,8 @@ fetch('https://api.ipify.org?format=json')
 document.addEventListener('DOMContentLoaded', () => {
     checkExistingUser();
     setupEventListeners();
+    setupMobileNav();
+    setupChatContextMenu();
 });
 
 function checkExistingUser() {
@@ -154,6 +159,142 @@ function setupEventListeners() {
 
     document.addEventListener('click', hideMessageMenu);
 }
+
+function setupMobileNav() {
+    if (window.innerWidth <= 768) {
+        document.getElementById('navChats').addEventListener('click', () => {
+            showMobileView('chats');
+        });
+        
+        document.getElementById('navSearch').addEventListener('click', () => {
+            showMobileView('search');
+        });
+        
+        document.getElementById('navProfile').addEventListener('click', () => {
+            openProfile(currentUser.id);
+        });
+    }
+}
+
+function showMobileView(view) {
+    currentView = view;
+    
+    // Обновляем активную кнопку навигации
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    
+    if (view === 'chats') {
+        document.getElementById('navChats').classList.add('active');
+        document.getElementById('searchContainer').classList.remove('active');
+        document.getElementById('chatsList').classList.remove('hidden');
+    } else if (view === 'search') {
+        document.getElementById('navSearch').classList.add('active');
+        document.getElementById('searchContainer').classList.add('active');
+        document.getElementById('chatsList').classList.add('hidden');
+    }
+}
+
+function setupChatContextMenu() {
+    // Для десктопа - правый клик
+    document.addEventListener('contextmenu', (e) => {
+        const chatItem = e.target.closest('.chat-item');
+        if (chatItem) {
+            e.preventDefault();
+            showChatContextMenu(e.pageX, e.pageY, chatItem);
+        }
+    });
+    
+    // Для мобильных - долгое нажатие
+    document.addEventListener('touchstart', (e) => {
+        const chatItem = e.target.closest('.chat-item');
+        if (chatItem) {
+            longPressTimer = setTimeout(() => {
+                const touch = e.touches[0];
+                showChatContextMenu(touch.pageX, touch.pageY, chatItem);
+            }, 500);
+        }
+    });
+    
+    document.addEventListener('touchend', () => {
+        clearTimeout(longPressTimer);
+    });
+    
+    document.addEventListener('touchmove', () => {
+        clearTimeout(longPressTimer);
+    });
+    
+    // Обработчики для пунктов меню
+    document.getElementById('deleteChatBtn').addEventListener('click', deleteChat);
+    document.getElementById('viewProfileBtn').addEventListener('click', viewChatProfile);
+    
+    // Скрытие меню при клике вне его
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.chat-context-menu')) {
+            document.getElementById('chatContextMenu').classList.remove('show');
+        }
+    });
+}
+
+function showChatContextMenu(x, y, chatItem) {
+    const menu = document.getElementById('chatContextMenu');
+    contextMenuTarget = chatItem;
+    
+    // Позиционирование меню
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+    
+    // Корректировка позиции если меню выходит за границы экрана
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+        menu.style.left = (window.innerWidth - rect.width - 10) + 'px';
+    }
+    if (rect.bottom > window.innerHeight) {
+        menu.style.top = (window.innerHeight - rect.height - 10) + 'px';
+    }
+    
+    menu.classList.add('show');
+}
+
+async function deleteChat() {
+    if (!contextMenuTarget) return;
+    
+    const userId = contextMenuTarget.dataset.userId;
+    if (!userId) return;
+    
+    if (confirm('Удалить этот чат?')) {
+        try {
+            // Удаляем чат из списка пользователя
+            const chatRef = ref(database, `userChats/${currentUser.id}/${userId}`);
+            await remove(chatRef);
+            
+            // Если это текущий открытый чат, закрываем его
+            if (currentChatUser && currentChatUser.id === userId) {
+                currentChatUser = null;
+                document.getElementById('welcomeScreen').style.display = 'flex';
+                document.getElementById('chatHeader').style.display = 'none';
+                document.getElementById('messagesContainer').style.display = 'none';
+                document.getElementById('messageInputContainer').style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Error deleting chat:', error);
+        }
+    }
+    
+    document.getElementById('chatContextMenu').classList.remove('show');
+}
+
+function viewChatProfile() {
+    if (!contextMenuTarget) return;
+    
+    const userId = contextMenuTarget.dataset.userId;
+    if (userId) {
+        openProfile(userId);
+    }
+    
+    document.getElementById('chatContextMenu').classList.remove('show');
+}
+
 
 function hashPassword(password) {
     // Простая хеш-функция для паролей
@@ -427,6 +568,8 @@ async function loadChats() {
 function createChatItem(chat) {
     const div = document.createElement('div');
     div.className = 'chat-item';
+    div.dataset.userId = chat.userId;
+    
     if (currentChatUser && currentChatUser.id === chat.userId) {
         div.classList.add('active');
     }
@@ -441,13 +584,19 @@ function createChatItem(chat) {
     const time = chat.lastMessageTime ? formatTime(chat.lastMessageTime) : '';
     const unreadHtml = chat.unread > 0 ? `<div class="chat-item-unread">${chat.unread}</div>` : '';
     
+    // Определяем префикс для последнего сообщения
+    let lastMessageDisplay = chat.lastMessage;
+    if (chat.lastMessageSender === currentUser.id) {
+        lastMessageDisplay = `Вы: ${chat.lastMessage}`;
+    }
+    
     div.innerHTML = `
         <div class="chat-item-avatar avatar-gradient-${chat.userData.avatar || 1}">
             ${avatarHtml}
         </div>
         <div class="chat-item-info">
             <div class="chat-item-name">${chat.userData.name}${chat.userData.isDeveloper ? ' <span class="developer-badge">DEV</span>' : ''}</div>
-            <div class="chat-item-last-message">${chat.lastMessage}</div>
+            <div class="chat-item-last-message">${lastMessageDisplay}</div>
         </div>
         <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 5px;">
             <div class="chat-item-time">${time}</div>
@@ -455,7 +604,13 @@ function createChatItem(chat) {
         </div>
     `;
     
-    div.addEventListener('click', () => openChat(chat.userId, chat.userData));
+    div.addEventListener('click', () => {
+        openChat(chat.userId, chat.userData);
+        if (window.innerWidth <= 768) {
+            document.getElementById('sidebar').classList.add('hidden');
+            document.getElementById('chatArea').classList.add('active');
+        }
+    });
     
     return div;
 }
@@ -697,20 +852,21 @@ async function sendMessage() {
         
         await push(messagesRef, messageData);
         
-        // Создаем или обновляем чат для обоих пользователей
+        // Обновляем чаты с указанием отправителя
         const userChatData = {
             lastMessage: text,
             lastMessageTime: Date.now(),
+            lastMessageSender: currentUser.id,
             unread: 0
         };
         
         const otherUserChatData = {
             lastMessage: text,
             lastMessageTime: Date.now(),
+            lastMessageSender: currentUser.id,
             unread: 1
         };
         
-        // Получаем текущее количество непрочитанных
         const otherUserChatRef = ref(database, `userChats/${currentChatUser.id}/${currentUser.id}`);
         try {
             const snapshot = await get(otherUserChatRef);
@@ -722,7 +878,6 @@ async function sendMessage() {
             // Если чата еще нет, unread остается 1
         }
         
-        // Записываем данные
         const userChatRef = ref(database, `userChats/${currentUser.id}/${currentChatUser.id}`);
         await set(userChatRef, userChatData);
         await set(otherUserChatRef, otherUserChatData);
