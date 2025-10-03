@@ -1322,16 +1322,21 @@ async function saveProfile() {
         if (selectedAvatar) {
             currentUser.avatar = selectedAvatar;
         }
-        if (selectedAvatarImage) {
+        if (selectedAvatarImage !== null) {
             currentUser.avatarImage = selectedAvatarImage;
+        }
+
+        const updateData = {
+            avatar: currentUser.avatar,
+            bio: currentUser.bio
+        };
+
+        if (currentUser.avatarImage !== undefined) {
+            updateData.avatarImage = currentUser.avatarImage || null;
         }
         
         const userRef = ref(database, `users/${currentUser.id}`);
-        await update(userRef, {
-            avatar: currentUser.avatar,
-            avatarImage: currentUser.avatarImage,
-            bio: currentUser.bio
-        });
+        await update(userRef, updateData);
         
         localStorage.setItem('waveUser', JSON.stringify(currentUser));
         updateUserUI();
@@ -1352,9 +1357,9 @@ async function saveProfile() {
         
     } catch (error) {
         console.error('Error saving profile:', error);
+        alert('Ошибка сохранения профиля. Попробуйте еще раз.');
     }
 }
-
 function closeProfile() {
     document.getElementById('profileModal').classList.remove('show');
     isEditing = false;
