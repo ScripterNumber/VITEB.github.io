@@ -52,46 +52,44 @@ if ('serviceWorker' in navigator) {
 }
 
 function showNotification(title, message, buttons = []) {
-    const modal = document.getElementById('customNotification');
-    const titleEl = document.getElementById('notificationTitle');
-    const messageEl = document.getElementById('notificationMessage');
-    const buttonsEl = document.getElementById('notificationButtons');
-    
-    titleEl.textContent = title;
-    messageEl.textContent = message;
-    buttonsEl.innerHTML = '';
-    
-    buttons.forEach(btn => {
-        const button = document.createElement('button');
-        button.className = `notification-btn notification-btn-${btn.type || 'secondary'}`;
-        button.textContent = btn.text;
-        button.onclick = () => {
-            modal.classList.remove('show');
-            if (btn.onClick) btn.onClick();
-        };
-        buttonsEl.appendChild(button);
-    });
-    
-    modal.classList.add('show');
-    
     return new Promise((resolve) => {
-        window.notificationResolve = resolve;
+        const modal = document.getElementById('customNotification');
+        const titleEl = document.getElementById('notificationTitle');
+        const messageEl = document.getElementById('notificationMessage');
+        const buttonsEl = document.getElementById('notificationButtons');
+        
+        titleEl.textContent = title;
+        messageEl.textContent = message;
+        buttonsEl.innerHTML = '';
+        
+        buttons.forEach(btn => {
+            const button = document.createElement('button');
+            button.className = `notification-btn notification-btn-${btn.type || 'secondary'}`;
+            button.textContent = btn.text;
+            button.onclick = () => {
+                modal.classList.remove('show');
+                const result = btn.onClick ? btn.onClick() : true;
+                resolve(result);
+            };
+            buttonsEl.appendChild(button);
+        });
+        
+        modal.classList.add('show');
     });
 }
 
 function customAlert(message) {
     return showNotification('Уведомление', message, [
-        { text: 'OK', type: 'primary', onClick: () => {} }
+        { text: 'OK', type: 'primary', onClick: () => true }
     ]);
 }
 
+
 function customConfirm(message) {
-    return new Promise((resolve) => {
-        showNotification('Подтверждение', message, [
-            { text: 'Отмена', type: 'secondary', onClick: () => resolve(false) },
-            { text: 'OK', type: 'danger', onClick: () => resolve(true) }
-        ]);
-    });
+    return showNotification('Подтверждение', message, [
+        { text: 'Отмена', type: 'secondary', onClick: () => false },
+        { text: 'OK', type: 'danger', onClick: () => true }
+    ]);
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -335,30 +333,39 @@ function setupMobileNav() {
         const mobileNav = document.getElementById('mobileNav');
         const toggleBtn = document.getElementById('mobileNavToggle');
 
-        const checkChats = async () => {
-            if (currentUser) {
-                const chatsRef = ref(database, `userChats/${currentUser.id}`);
-                const snapshot = await get(chatsRef);
-                const chats = snapshot.val() || {};
-                
-                if (Object.keys(chats).length > 0) {
-                    mobileNav.classList.add('show');
-                } else {
-                    mobileNav.classList.remove('show');
-                }
+
+        const updateNavVisibility = (snapshot) => {
+            const chats = snapshot.val() || {};
+            const hasChats = Object.keys(chats).length > 0;
+
+            if (hasChats && !currentChatUser) {
+                mobileNav.classList.add('show');
+                toggleBtn.style.display = 'flex';
+            } else if (!hasChats) {
+                mobileNav.classList.remove('show');
+                toggleBtn.style.display = 'none';
             }
         };
+
+
+        if (currentUser) {
+            const chatsRef = ref(database, `userChats/${currentUser.id}`);
+            onValue(chatsRef, updateNavVisibility);
+        }
         
-        checkChats();
-        
+
         const savedNavState = localStorage.getItem('mobileNavVisible');
         
         if (savedNavState === 'false') {
             mobileNav.classList.add('hidden');
             toggleBtn.classList.add('nav-hidden');
+            toggleBtn.classList.remove('nav-visible');
         } else {
+            mobileNav.classList.remove('hidden');
+            toggleBtn.classList.remove('nav-hidden');
             toggleBtn.classList.add('nav-visible');
         }
+
 
         toggleBtn.addEventListener('click', () => {
             const isHidden = mobileNav.classList.toggle('hidden');
@@ -367,6 +374,7 @@ function setupMobileNav() {
             localStorage.setItem('mobileNavVisible', isHidden ? 'false' : 'true');
         });
         
+
         document.getElementById('navChats').addEventListener('click', () => {
             if (currentChatUser) {
                 backToChats();
@@ -376,14 +384,7 @@ function setupMobileNav() {
         
         document.getElementById('navSearch').addEventListener('click', () => {
             if (currentChatUser) {
-                document.getElementById('sidebar').classList.remove('hidden');
-                document.getElementById('chatArea').classList.remove('active');
-                
-                currentChatUser = null;
-                if (messagesListener) {
-                    messagesListener();
-                    messagesListener = null;
-                }
+                backToChats();
             }
             showMobileView('search');
         });
@@ -474,7 +475,9 @@ async function deleteChat() {
     const userId = contextMenuTarget.dataset.userId;
     if (!userId) return;
     
-    if (customConfirm('Удалить этот чат?')) {
+    const confirmed = await customConfirm('Удалить этот чат?');
+    
+    if (confirmed) {
         try {
             const chatRef = ref(database, `userChats/${currentUser.id}/${userId}`);
             await remove(chatRef);
@@ -998,13 +1001,12 @@ async function openChat(userId, userData) {
     console.log('💬 Открытие чата с:', userData.name);
     
     if (blockedUsers.has(userId)) {
-        customAlert('Этот пользователь заблокирован');
+        await customAlert('Этот пользователь заблокирован');
         return;
     }
     
     currentChatUser = { id: userId, ...userData };
     
-
     existingMessages.clear();
     const container = document.getElementById('messagesContainer');
     container.innerHTML = '';
@@ -1014,24 +1016,20 @@ async function openChat(userId, userData) {
     const messagesContainer = document.getElementById('messagesContainer');
     const messageInputContainer = document.getElementById('messageInputContainer');
     
-
     welcomeScreen.classList.add('view-hidden');
-    
-
     chatHeader.classList.add('view-visible');
     messagesContainer.classList.add('view-visible');
     messageInputContainer.classList.add('view-visible');
     
-    console.log('✅ Классы добавлены');
-    console.log('chatHeader display:', window.getComputedStyle(chatHeader).display);
-    console.log('messagesContainer display:', window.getComputedStyle(messagesContainer).display);
-    
     if (window.innerWidth <= 768) {
         document.getElementById('sidebar').classList.add('hidden');
         document.getElementById('chatArea').classList.add('active');
-        document.getElementById('mobileNav').classList.add('in-chat');
         
+
+        const mobileNav = document.getElementById('mobileNav');
         const toggleBtn = document.getElementById('mobileNavToggle');
+        
+        mobileNav.classList.add('in-chat');
         if (toggleBtn) {
             toggleBtn.classList.add('in-chat');
         }
@@ -1041,7 +1039,6 @@ async function openChat(userId, userData) {
         }, 100);
     }
     
-
     const chatAvatar = document.getElementById('chatUserAvatar');
     if (userData.avatarImage) {
         chatAvatar.innerHTML = `<img src="${userData.avatarImage}" alt="">`;
@@ -1053,7 +1050,6 @@ async function openChat(userId, userData) {
     
     document.getElementById('chatUserName').innerHTML = (userData.name || 'User') + (userData.isDeveloper ? ' <span class="developer-badge">DEV</span>' : '');
     
-    // Статус пользователя
     const statusRef = ref(database, `users/${userId}`);
     onValue(statusRef, (snapshot) => {
         const user = snapshot.val();
@@ -1068,7 +1064,6 @@ async function openChat(userId, userData) {
     console.log('🔍 Загружаем сообщения...');
     loadMessages(userId);
     
-
     document.querySelectorAll('.chat-item').forEach(item => item.classList.remove('active'));
     const activeChat = document.querySelector(`[data-user-id="${userId}"]`);
     if (activeChat) activeChat.classList.add('active');
@@ -1454,7 +1449,9 @@ async function openProfile(userId) {
 }
 
 async function deleteAccount() {
-    if (customConfirm('Вы уверены, что хотите удалить свой аккаунт? Это действие необратимо!')) {
+    const confirmed = await customConfirm('Вы уверены, что хотите удалить свой аккаунт? Это действие необратимо!');
+    
+    if (confirmed) {
         try {
             const userRef = ref(database, `users/${currentUser.id}`);
             await remove(userRef);
@@ -1466,7 +1463,7 @@ async function deleteAccount() {
             location.reload();
         } catch (error) {
             console.error('Error deleting account:', error);
-            customAlert('Ошибка удаления аккаунта');
+            await customAlert('Ошибка удаления аккаунта');
         }
     }
 }
@@ -1722,7 +1719,9 @@ async function kickUser() {
     const userId = document.getElementById('profileModal').dataset.userId;
     if (!userId || !isDeveloper) return;
     
-    if (customConfirm('Вы уверены, что хотите кикнуть этого пользователя?')) {
+    const confirmed = await customConfirm('Вы уверены, что хотите кикнуть этого пользователя?');
+    
+    if (confirmed) {
         try {
             const userRef = ref(database, `users/${userId}`);
             await remove(userRef);
@@ -1864,9 +1863,9 @@ function closeSidebar() {
 async function clearCurrentChat() {
     if (!currentChatUser) return;
     
-    const customConfirmed = await customConfirm('Удалить все сообщения в этом чате?');
+    const confirmed = await customConfirm('Удалить все сообщения в этом чате?');
     
-    if (customConfirmed) {
+    if (confirmed) {
         try {
             const chatId = getChatId(currentUser.id, currentChatUser.id);
             const messagesRef = ref(database, `messages/${chatId}`);
@@ -1899,8 +1898,11 @@ async function clearCurrentChat() {
         }
     }
 }
+
 async function logout() {
-    if (customConfirm('Вы уверены, что хотите выйти?')) {
+    const confirmed = await customConfirm('Вы уверены, что хотите выйти?');
+    
+    if (confirmed) {
         try {
             if (currentUser) {
                 const userRef = ref(database, `users/${currentUser.id}`);
