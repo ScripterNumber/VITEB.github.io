@@ -204,55 +204,58 @@
         </aside>
 
         <main class="chat-area" id="chatArea">
-            <div class="welcome-screen" id="welcomeScreen">
-                <div class="welcome-content">
-                    <div class="welcome-icon">💬</div>
-                    <h2>Добро пожаловать в Wave Chat!</h2>
-                    <p>Найдите друзей через поиск и начните общение</p>
-                </div>
-            </div>
+    <div class="welcome-screen" id="welcomeScreen">
+        <div class="welcome-content">
+            <div class="welcome-icon">💬</div>
+            <h2>Добро пожаловать в Wave Chat!</h2>
+            <p>Найдите друзей через поиск и начните общение</p>
+        </div>
+    </div>
 
-            <header class="chat-header" id="chatHeader" style="display: none;">
-                <button class="btn-icon menu-toggle" id="menuToggleBtn">☰</button>
-                <div class="chat-user-info" id="chatUserInfo">
-                    <div class="chat-user-avatar" id="chatUserAvatar"></div>
-                    <div class="chat-user-details">
-                        <div class="chat-user-name" id="chatUserName"></div>
-                        <div class="chat-user-status" id="chatUserStatus"></div>
-                    </div>
-                </div>
-                <div class="chat-actions">
-                    <button class="btn-icon" id="chatOptionsBtn" title="Меню">⋮</button>
-                </div>
-            </header>
-
-            <div class="messages-container" id="messagesContainer" style="display: none;">
+    <!-- ✅ УБРАЛИ style="display: none;" -->
+    <header class="chat-header" id="chatHeader">
+        <button class="btn-icon menu-toggle" id="menuToggleBtn">☰</button>
+        <div class="chat-user-info" id="chatUserInfo">
+            <div class="chat-user-avatar" id="chatUserAvatar"></div>
+            <div class="chat-user-details">
+                <div class="chat-user-name" id="chatUserName"></div>
+                <div class="chat-user-status" id="chatUserStatus"></div>
             </div>
+        </div>
+        <div class="chat-actions">
+            <button class="btn-icon" id="chatOptionsBtn" title="Меню">⋮</button>
+        </div>
+    </header>
 
-            <div class="message-input-container" id="messageInputContainer" style="display: none;">
-                <div class="reply-container" id="replyContainer">
-                    <div class="reply-header">
-                        <div>
-                            <div class="reply-to">Ответ для <span id="replyToName"></span></div>
-                            <div class="reply-text" id="replyText"></div>
-                        </div>
-                        <button class="btn-close-reply" id="cancelReplyBtn">×</button>
-                    </div>
+    <!-- ✅ УБРАЛИ style="display: none;" -->
+    <div class="messages-container" id="messagesContainer">
+    </div>
+
+    <!-- ✅ УБРАЛИ style="display: none;" -->
+    <div class="message-input-container" id="messageInputContainer">
+        <div class="reply-container" id="replyContainer">
+            <div class="reply-header">
+                <div>
+                    <div class="reply-to">Ответ для <span id="replyToName"></span></div>
+                    <div class="reply-text" id="replyText"></div>
                 </div>
-                <div class="message-input-wrapper">
-                    <label class="media-upload-btn">
-                        📎
-                        <input type="file" accept="image/*" id="mediaUpload">
-                    </label>
-                    <div class="input-group">
-                        <textarea class="message-input" id="messageInput" placeholder="Введите сообщение..." rows="1"></textarea>
-                    </div>
-                    <button class="send-btn" id="sendBtn">
-                        <span>➤</span>
-                    </button>
-                </div>
+                <button class="btn-close-reply" id="cancelReplyBtn">×</button>
             </div>
-        </main>
+        </div>
+        <div class="message-input-wrapper">
+            <label class="media-upload-btn">
+                📎
+                <input type="file" accept="image/*" id="mediaUpload">
+            </label>
+            <div class="input-group">
+                <textarea class="message-input" id="messageInput" placeholder="Введите сообщение..." rows="1"></textarea>
+            </div>
+            <button class="send-btn" id="sendBtn">
+                <span>➤</span>
+            </button>
+        </div>
+    </div>
+</main>
     </div>
 
     <script type="module" src="firebase-config.js"></script>
