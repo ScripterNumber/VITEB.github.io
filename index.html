@@ -6,19 +6,11 @@
     <title>Wave Chat | Personal Messenger</title>
     <link rel="stylesheet" href="styles.css">
     <meta name="theme-color" content="#667eea">
-    <meta name="theme-color" content="#667eea">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Wave">
-
     <link rel="manifest" href="/manifest.json">
-
-    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png">
-    <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
-
-    <link rel="manifest" href="/manifest.json">
-
     <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192x192.png">
     <link rel="apple-touch-icon" href="/icons/icon-192x192.png">
 </head>
@@ -143,7 +135,6 @@
         </div>
     </div>
 
-    <!-- Settings Modal -->
     <div class="settings-modal hidden" id="settingsModal">
         <div class="settings-box">
             <div class="settings-header">
@@ -165,35 +156,28 @@
         </div>
     </div>
 
-    <!-- Mobile bottom navigation -->
-    <div class="mobile-nav" id="mobileNav">
-        <button class="nav-item active" id="navChats">
-            <span class="nav-icon">💬</span>
-            <span class="nav-label">Чаты</span>
-        </button>
-        <button class="nav-item" id="navSearch">
-            <span class="nav-icon">🔍</span>
-            <span class="nav-label">Поиск</span>
-        </button>
-        <button class="nav-item" id="navProfile">
-            <span class="nav-icon">👤</span>
-            <span class="nav-label">Профиль</span>
-        </button>
+    <div class="custom-notification" id="customNotification">
+        <div class="notification-box">
+            <div class="notification-title" id="notificationTitle"></div>
+            <div class="notification-message" id="notificationMessage"></div>
+            <div class="notification-buttons" id="notificationButtons"></div>
+        </div>
     </div>
-
-    <!-- Mobile nav toggle button -->
-    <button class="mobile-nav-toggle" id="mobileNavToggle">
-        <span class="toggle-icon">▲</span>
-    </button>
     
     <div class="container">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <div class="app-title">
-                    <span>💬</span>
-                    <span>Wave Chat</span>
+                <div class="sidebar-header-top">
+                    <div class="app-title">
+                        <span>💬</span>
+                        <span>Wave Chat</span>
+                    </div>
+                    <div class="header-buttons">
+                        <button class="btn-icon mobile-profile-btn" id="mobileProfileBtn" title="Профиль">👤</button>
+                        <button class="btn-icon settings-btn" id="settingsBtn" title="Настройки">⚙️</button>
+                        <button class="btn-icon mobile-settings-btn" id="mobileSettingsBtn" title="Настройки">⚙️</button>
+                    </div>
                 </div>
-                <button class="btn-icon settings-btn" id="settingsBtn" title="Настройки">⚙️</button>
                 <div class="user-info" id="currentUserInfo">
                     <div class="user-avatar" id="currentUserAvatar">
                         <span id="currentUserAvatarText">U</span>
@@ -209,7 +193,7 @@
             </div>
             
             <div class="search-container" id="searchContainer">
-                <input type="text" id="searchInput" placeholder="Поиск" class="search-input">
+                <input type="text" id="searchInput" placeholder="Поиск пользователей" class="search-input">
                 <div class="search-results" id="searchResults"></div>
             </div>
             
@@ -220,71 +204,57 @@
         </aside>
 
         <main class="chat-area" id="chatArea">
-    <div class="welcome-screen" id="welcomeScreen">
-        <div class="welcome-content">
-            <div class="welcome-icon">💬</div>
-            <h2>Добро пожаловать в Wave Chat!</h2>
-            <p>Найдите друзей через поиск и начните общение</p>
-        </div>
-    </div>
-
-    <!-- ✅ УБРАЛИ style="display: none;" -->
-    <header class="chat-header" id="chatHeader">
-        <button class="btn-icon menu-toggle" id="menuToggleBtn">☰</button>
-        <div class="chat-user-info" id="chatUserInfo">
-            <div class="chat-user-avatar" id="chatUserAvatar"></div>
-            <div class="chat-user-details">
-                <div class="chat-user-name" id="chatUserName"></div>
-                <div class="chat-user-status" id="chatUserStatus"></div>
-            </div>
-        </div>
-        <div class="chat-actions">
-            <button class="btn-icon" id="chatOptionsBtn" title="Меню">⋮</button>
-        </div>
-    </header>
-
-    <!-- ✅ УБРАЛИ style="display: none;" -->
-    <div class="messages-container" id="messagesContainer">
-    </div>
-
-    <!-- ✅ УБРАЛИ style="display: none;" -->
-    <div class="message-input-container" id="messageInputContainer">
-        <div class="reply-container" id="replyContainer">
-            <div class="reply-header">
-                <div>
-                    <div class="reply-to">Ответ для <span id="replyToName"></span></div>
-                    <div class="reply-text" id="replyText"></div>
+            <div class="welcome-screen" id="welcomeScreen">
+                <div class="welcome-content">
+                    <div class="welcome-icon">💬</div>
+                    <h2>Добро пожаловать в Wave Chat!</h2>
+                    <p>Найдите друзей через поиск и начните общение</p>
                 </div>
-                <button class="btn-close-reply" id="cancelReplyBtn">×</button>
             </div>
-        </div>
-        <div class="message-input-wrapper">
-            <label class="media-upload-btn">
-                📎
-                <input type="file" accept="image/*" id="mediaUpload">
-            </label>
-            <div class="input-group">
-                <textarea class="message-input" id="messageInput" placeholder="Введите сообщение..." rows="1"></textarea>
-            </div>
-            <button class="send-btn" id="sendBtn">
-                <span>➤</span>
-            </button>
-        </div>
-    </div>
 
-<div class="custom-notification" id="customNotification">
-    <div class="notification-box">
-        <div class="notification-title" id="notificationTitle"></div>
-        <div class="notification-message" id="notificationMessage"></div>
-        <div class="notification-buttons" id="notificationButtons"></div>
-    </div>
-</div>
-            
-</main>
+            <header class="chat-header" id="chatHeader">
+                <button class="btn-icon menu-toggle" id="menuToggleBtn">☰</button>
+                <div class="chat-user-info" id="chatUserInfo">
+                    <div class="chat-user-avatar" id="chatUserAvatar"></div>
+                    <div class="chat-user-details">
+                        <div class="chat-user-name" id="chatUserName"></div>
+                        <div class="chat-user-status" id="chatUserStatus"></div>
+                    </div>
+                </div>
+                <div class="chat-actions">
+                    <button class="btn-icon" id="chatOptionsBtn" title="Меню">⋮</button>
+                </div>
+            </header>
+
+            <div class="messages-container" id="messagesContainer"></div>
+
+            <div class="message-input-container" id="messageInputContainer">
+                <div class="reply-container" id="replyContainer">
+                    <div class="reply-header">
+                        <div>
+                            <div class="reply-to">Ответ для <span id="replyToName"></span></div>
+                            <div class="reply-text" id="replyText"></div>
+                        </div>
+                        <button class="btn-close-reply" id="cancelReplyBtn">×</button>
+                    </div>
+                </div>
+                <div class="message-input-wrapper">
+                    <label class="media-upload-btn">
+                        📎
+                        <input type="file" accept="image/*" id="mediaUpload">
+                    </label>
+                    <div class="input-group">
+                        <textarea class="message-input" id="messageInput" placeholder="Введите сообщение..." rows="1"></textarea>
+                    </div>
+                    <button class="send-btn" id="sendBtn">
+                        <span>➤</span>
+                    </button>
+                </div>
+            </div>
+        </main>
     </div>
 
     <script type="module" src="firebase-config.js"></script>
     <script type="module" src="app.js"></script>
-    
 </body>
 </html>
