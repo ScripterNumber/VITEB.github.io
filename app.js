@@ -1,4 +1,5 @@
 import { database } from './firebase-config.js';
+console.log('✅ Database импортирован:', database);
 import { 
     ref, 
     push, 
@@ -620,9 +621,24 @@ function updateUserUI() {
 }
 
 function initApp() {
-    loadChats();
+    console.log('🚀 Инициализация приложения');
+    console.log('👤 Текущий пользователь:', currentUser);
+    console.log('🔗 Database объект:', database);
+    
+    if (!currentUser) {
+        console.error('❌ currentUser не определен!');
+        return;
+    }
+    
+    if (!database) {
+        console.error('❌ database не определен!');
+        alert('Ошибка: Firebase Database не инициализирована');
+        return;
+    }
+    
     setupOnlineStatus();
     loadBlockedUsers();
+    loadChats();
 }
 
 async function loadBlockedUsers() {
@@ -658,83 +674,151 @@ async function setupOnlineStatus() {
 }
 
 async function loadChats() {
-    const chatsRef = ref(database, `userChats/${currentUser.id}`);
-
-
-    if (window.chatsListener) {
-        window.chatsListener(); 
+    console.log('📱 === НАЧАЛО loadChats() ===');
+    console.log('👤 currentUser:', currentUser);
+    console.log('🔗 database:', database);
+    
+    if (!currentUser || !currentUser.id) {
+        console.error('❌ Нет currentUser или currentUser.id');
+        return;
     }
     
-    window.chatsListener = onValue(chatsRef, async (snapshot) => {
-        try {
-            const chats = snapshot.val();
-            console.log('Загруженные чаты:', chats); // Для отладки
-            
-            if (!chats) {
-                console.log('Нет чатов');
-                document.getElementById('chatsContainer').innerHTML = 
-                    '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Нет чатов</div>';
-                return;
-            }
-            
-            const container = document.getElementById('chatsContainer');
-            const chatMap = new Map();
+    const container = document.getElementById('chatsContainer');
+    if (!container) {
+        console.error('❌ Элемент chatsContainer не найден!');
+        return;
+    }
+    
+    container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">⏳ Загрузка чатов...</div>';
+    
+    const chatsRef = ref(database, `userChats/${currentUser.id}`);
+    console.log('📍 Путь к чатам:', `userChats/${currentUser.id}`);
+    
+
+    if (window.chatsListener) {
+        console.log('🔄 Отписка от предыдущего listener');
+        window.chatsListener();
+    }
+    
+
+    try {
+        console.log('🔍 Попытка получить чаты через get()...');
+        const snapshot = await get(chatsRef);
+        console.log('📊 Snapshot exists:', snapshot.exists());
+        console.log('📊 Snapshot val:', snapshot.val());
+        
+        if (!snapshot.exists()) {
+            console.log('ℹ️ Нет чатов в базе данных');
+            container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Нет чатов. Найдите пользователей через поиск!</div>';
             
 
-            const userPromises = Object.entries(chats).map(async ([userId, chatData]) => {
-                if (blockedUsers.has(userId)) return null;
-                
-                try {
-                    const userRef = ref(database, `users/${userId}`);
-                    const userSnapshot = await get(userRef);
-                    const userData = userSnapshot.val();
-                    
-                    if (userData) {
-                        return {
-                            userId,
-                            userData,
-                            lastMessage: chatData.lastMessage || '',
-                            lastMessageTime: chatData.lastMessageTime || 0,
-                            lastMessageSender: chatData.lastMessageSender || '',
-                            unread: chatData.unread || 0
-                        };
-                    }
-                } catch (error) {
-                    console.error(`Ошибка загрузки пользователя ${userId}:`, error);
-                }
-                return null;
-            });
-
-            const results = await Promise.all(userPromises);
-            const validChats = results.filter(chat => chat !== null);
-            
-            console.log('Валидные чаты:', validChats);
-
-            const chatArray = validChats.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
-
-            container.innerHTML = '';
-            
-            if (chatArray.length === 0) {
-                container.innerHTML = 
-                    '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Нет активных чатов</div>';
-                return;
-            }
-            
-            chatArray.forEach(chat => {
-                const chatItem = createChatItem(chat);
-                container.appendChild(chatItem);
-            });
-            
-        } catch (error) {
-            console.error('Ошибка загрузки чатов:', error);
-            document.getElementById('chatsContainer').innerHTML = 
-                '<div style="padding: 20px; text-align: center; color: red;">Ошибка загрузки чатов</div>';
+            window.chatsListener = onValue(chatsRef, handleChatsUpdate, handleChatsError);
+            return;
         }
-    }, (error) => {
-        // Обработчик ошибок для onValue
-        console.error('Firebase onValue ошибка:', error);
-        alert('Ошибка подключения к базе данных: ' + error.message);
-    });
+        
+
+        window.chatsListener = onValue(chatsRef, handleChatsUpdate, handleChatsError);
+        
+    } catch (error) {
+        console.error('❌ Ошибка при загрузке чатов:', error);
+        container.innerHTML = `<div style="padding: 20px; text-align: center; color: red;">❌ Ошибка: ${error.message}</div>`;
+    }
+}
+
+async function handleChatsUpdate(snapshot) {
+    console.log('🔔 handleChatsUpdate вызван');
+    console.log('📊 Данные snapshot:', snapshot.val());
+    
+    const chats = snapshot.val();
+    const container = document.getElementById('chatsContainer');
+    
+    if (!chats || Object.keys(chats).length === 0) {
+        console.log('ℹ️ Чаты пусты');
+        container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Нет чатов. Найдите пользователей через поиск!</div>';
+        return;
+    }
+    
+    console.log('📝 Количество чатов:', Object.keys(chats).length);
+    
+    try {
+        const chatPromises = Object.entries(chats).map(async ([userId, chatData]) => {
+            console.log(`👤 Загрузка пользователя ${userId}...`);
+            
+            if (blockedUsers.has(userId)) {
+                console.log(`🚫 Пользователь ${userId} заблокирован, пропускаем`);
+                return null;
+            }
+            
+            try {
+                const userRef = ref(database, `users/${userId}`);
+                const userSnapshot = await get(userRef);
+                
+                if (!userSnapshot.exists()) {
+                    console.log(`⚠️ Пользователь ${userId} не существует в базе`);
+                    return null;
+                }
+                
+                const userData = userSnapshot.val();
+                console.log(`✅ Пользователь ${userId} загружен:`, userData);
+                
+                return {
+                    userId,
+                    userData,
+                    lastMessage: chatData.lastMessage || '',
+                    lastMessageTime: chatData.lastMessageTime || 0,
+                    lastMessageSender: chatData.lastMessageSender || '',
+                    unread: chatData.unread || 0
+                };
+            } catch (error) {
+                console.error(`❌ Ошибка загрузки пользователя ${userId}:`, error);
+                return null;
+            }
+        });
+        
+        const results = await Promise.all(chatPromises);
+        const validChats = results.filter(chat => chat !== null);
+        
+        console.log('✅ Валидные чаты:', validChats);
+        console.log('📊 Количество валидных чатов:', validChats.length);
+        
+        if (validChats.length === 0) {
+            container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Нет активных чатов</div>';
+            return;
+        }
+        
+        // Сортируем по времени последнего сообщения
+        const sortedChats = validChats.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
+        
+        // Очищаем контейнер
+        container.innerHTML = '';
+        
+        // Создаем элементы чатов
+        sortedChats.forEach((chat, index) => {
+            console.log(`🎨 Создание чата #${index + 1}:`, chat);
+            const chatItem = createChatItem(chat);
+            container.appendChild(chatItem);
+        });
+        
+        console.log('✅ Все чаты отображены');
+        
+    } catch (error) {
+        console.error('❌ Ошибка обработки чатов:', error);
+        container.innerHTML = `<div style="padding: 20px; text-align: center; color: red;">Ошибка: ${error.message}</div>`;
+    }
+}
+
+// Обработчик ошибок для onValue
+function handleChatsError(error) {
+    console.error('❌ Firebase onValue ошибка:', error);
+    const container = document.getElementById('chatsContainer');
+    if (container) {
+        container.innerHTML = `<div style="padding: 20px; text-align: center; color: red;">
+            ❌ Ошибка подключения к Firebase:<br>
+            ${error.message}<br>
+            <small>Проверьте настройки Firebase</small>
+        </div>`;
+    }
+    alert('Ошибка Firebase: ' + error.message);
 }
 
 function createChatItem(chat) {
