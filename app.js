@@ -1871,5 +1871,3 @@ function toggleMobileSearch() {
         document.getElementById('searchResults').innerHTML = '';
     }
 }
-
-function scrollToBottom() {
