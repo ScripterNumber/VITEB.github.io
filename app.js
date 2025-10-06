@@ -167,7 +167,14 @@ function setupEventListeners() {
     });
 
     document.getElementById('currentUserInfo').addEventListener('click', () => openProfile(currentUser.id));
-    document.getElementById('mobileProfileBtn')?.addEventListener('click', () => openProfile(currentUser.id));
+
+    const mobileSearchBtn = document.getElementById('mobileSearchBtn');
+    if (mobileSearchBtn) {
+        mobileSearchBtn.addEventListener('click', toggleMobileSearch);
+    }
+
+    
+
     document.getElementById('profileAvatar').addEventListener('click', (e) => {
         e.preventDefault();
     });
@@ -272,7 +279,6 @@ function loadTheme() {
 
 function setupSettings() {
     const settingsBtn = document.getElementById('settingsBtn');
-    const mobileSettingsBtn = document.getElementById('mobileSettingsBtn');
     const settingsModal = document.getElementById('settingsModal');
     const closeSettingsBtn = document.getElementById('closeSettingsBtn');
     const themeToggle = document.getElementById('themeToggle');
@@ -286,16 +292,10 @@ function setupSettings() {
         themeToggle.checked = true;
     }
     
-    const openSettings = () => {
-        settingsModal.classList.remove('hidden');
-    };
-    
     if (settingsBtn) {
-        settingsBtn.addEventListener('click', openSettings);
-    }
-    
-    if (mobileSettingsBtn) {
-        mobileSettingsBtn.addEventListener('click', openSettings);
+        settingsBtn.addEventListener('click', () => {
+            settingsModal.classList.remove('hidden');
+        });
     }
     
     closeSettingsBtn.addEventListener('click', () => {
@@ -1854,3 +1854,22 @@ function scrollToBottom() {
     const container = document.getElementById('messagesContainer');
     container.scrollTop = container.scrollHeight;
 }
+
+function toggleMobileSearch() {
+    const searchContainer = document.getElementById('searchContainer');
+    const chatsList = document.getElementById('chatsList');
+    const searchInput = document.getElementById('searchInput');
+
+    if (searchContainer.style.display === 'none' || searchContainer.style.display === '') {
+        searchContainer.style.display = 'block';
+        chatsList.style.display = 'none';
+        searchInput.focus();
+    } else {
+        searchContainer.style.display = 'none';
+        chatsList.style.display = 'block';
+        searchInput.value = '';
+        document.getElementById('searchResults').innerHTML = '';
+    }
+}
+
+function scrollToBottom() {
