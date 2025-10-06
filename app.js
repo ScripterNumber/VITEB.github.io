@@ -925,16 +925,24 @@ async function searchUsers() {
 }
 
 async function openChat(userId, userData) {
+    console.log('💬 === ОТКРЫТИЕ ЧАТА ===');
+    console.log('👤 userId:', userId);
+    console.log('📊 userData:', userData);
+    
     if (blockedUsers.has(userId)) {
         alert('Этот пользователь заблокирован');
         return;
     }
     
     currentChatUser = { id: userId, ...userData };
+    console.log('✅ currentChatUser установлен:', currentChatUser);
     
+
     existingMessages.clear();
-    document.getElementById('messagesContainer').innerHTML = '';
+    const container = document.getElementById('messagesContainer');
+    container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">⏳ Загрузка сообщений...</div>';
     
+
     document.getElementById('welcomeScreen').classList.add('view-hidden');
     document.getElementById('chatHeader').classList.add('view-visible');
     document.getElementById('messagesContainer').classList.add('view-visible');
@@ -955,6 +963,7 @@ async function openChat(userId, userData) {
         }, 100);
     }
     
+
     const chatAvatar = document.getElementById('chatUserAvatar');
     if (userData.avatarImage) {
         chatAvatar.innerHTML = `<img src="${userData.avatarImage}" alt="">`;
@@ -966,6 +975,7 @@ async function openChat(userId, userData) {
     
     document.getElementById('chatUserName').innerHTML = (userData.name || 'User') + (userData.isDeveloper ? ' <span class="developer-badge">DEV</span>' : '');
     
+
     const statusRef = ref(database, `users/${userId}`);
     onValue(statusRef, (snapshot) => {
         const user = snapshot.val();
@@ -976,9 +986,13 @@ async function openChat(userId, userData) {
     });
     
     await markAsRead(userId);
+    
+    console.log('🔍 Загрузка сообщений...');
     loadMessages(userId);
     
     document.querySelectorAll('.chat-item').forEach(item => item.classList.remove('active'));
+    const activeChat = document.querySelector(`[data-user-id="${userId}"]`);
+    if (activeChat) activeChat.classList.add('active');
 }
 
 async function markAsRead(userId) {
