@@ -1,5 +1,5 @@
 import { database } from './firebase-config.js';
-console.log('✅ Database импортирован:', database);
+console.log('✅ Database импортированн:', database);
 import { 
     ref, 
     push, 
