@@ -39,6 +39,49 @@ fetch('https://api.ipify.org?format=json')
         userIP = 'Unknown';
     });
 
+function showNotification(title, message, buttons = []) {
+    const modal = document.getElementById('customNotification');
+    const titleEl = document.getElementById('notificationTitle');
+    const messageEl = document.getElementById('notificationMessage');
+    const buttonsEl = document.getElementById('notificationButtons');
+    
+    titleEl.textContent = title;
+    messageEl.textContent = message;
+    buttonsEl.innerHTML = '';
+    
+    buttons.forEach(btn => {
+        const button = document.createElement('button');
+        button.className = `notification-btn notification-btn-${btn.type || 'secondary'}`;
+        button.textContent = btn.text;
+        button.onclick = () => {
+            modal.classList.remove('show');
+            if (btn.onClick) btn.onClick();
+        };
+        buttonsEl.appendChild(button);
+    });
+    
+    modal.classList.add('show');
+    
+    return new Promise((resolve) => {
+        window.notificationResolve = resolve;
+    });
+}
+
+function customAlert(message) {
+    return showNotification('Уведомление', message, [
+        { text: 'OK', type: 'primary', onClick: () => {} }
+    ]);
+}
+
+function customConfirm(message) {
+    return new Promise((resolve) => {
+        showNotification('Подтверждение', message, [
+            { text: 'Отмена', type: 'secondary', onClick: () => resolve(false) },
+            { text: 'OK', type: 'danger', onClick: () => resolve(true) }
+        ]);
+    });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     loadTheme();
     checkExistingUser();
@@ -53,6 +96,8 @@ document.addEventListener('DOMContentLoaded', () => {
         window.visualViewport.addEventListener('resize', handleViewportChange);
     }
 });
+
+
 
 function checkExistingUser() {
     console.log('🔍 Шаг 1: Проверка существующего пользователя...');
@@ -80,7 +125,7 @@ function checkExistingUser() {
             })
             .catch(error => {
                 console.error('❌ Ошибка проверки Firebase:', error);
-                alert('Ошибка подключения к Firebase: ' + error.message);
+                customAlert('Ошибка подключения к Firebase: ' + error.message);
             });
     } else {
         console.log('ℹ️ Сохраненный пользователь не найден');
@@ -276,6 +321,7 @@ function handleViewportChange() {
 function setupMobileNav() {
     if (window.innerWidth <= 768) {
         const mobileNav = document.getElementById('mobileNav');
+        const toggleBtn = document.getElementById('mobileNavToggle');
 
         const checkChats = async () => {
             if (currentUser) {
@@ -292,6 +338,22 @@ function setupMobileNav() {
         };
         
         checkChats();
+        
+        const savedNavState = localStorage.getItem('mobileNavVisible');
+        
+        if (savedNavState === 'false') {
+            mobileNav.classList.add('hidden');
+            toggleBtn.classList.add('nav-hidden');
+        } else {
+            toggleBtn.classList.add('nav-visible');
+        }
+
+        toggleBtn.addEventListener('click', () => {
+            const isHidden = mobileNav.classList.toggle('hidden');
+            toggleBtn.classList.toggle('nav-hidden');
+            toggleBtn.classList.toggle('nav-visible');
+            localStorage.setItem('mobileNavVisible', isHidden ? 'false' : 'true');
+        });
         
         document.getElementById('navChats').addEventListener('click', () => {
             if (currentChatUser) {
@@ -316,20 +378,6 @@ function setupMobileNav() {
         
         document.getElementById('navProfile').addEventListener('click', () => {
             openProfile(currentUser.id);
-        });
-
-        const mobileNavToggle = document.getElementById('mobileNavToggle');
-        const savedNavState = localStorage.getItem('mobileNavVisible');
-        
-        if (savedNavState === 'false') {
-            mobileNav.classList.add('hidden');
-            mobileNavToggle.classList.add('nav-hidden');
-        }
-
-        mobileNavToggle.addEventListener('click', () => {
-            const isHidden = mobileNav.classList.toggle('hidden');
-            mobileNavToggle.classList.toggle('nav-hidden');
-            localStorage.setItem('mobileNavVisible', isHidden ? 'false' : 'true');
         });
     }
 }
@@ -414,7 +462,7 @@ async function deleteChat() {
     const userId = contextMenuTarget.dataset.userId;
     if (!userId) return;
     
-    if (confirm('Удалить этот чат?')) {
+    if (customConfirm('Удалить этот чат?')) {
         try {
             const chatRef = ref(database, `userChats/${currentUser.id}/${userId}`);
             await remove(chatRef);
@@ -642,7 +690,7 @@ function initApp() {
     
     if (!database) {
         console.error('❌ database не определен!');
-        alert('Ошибка: Firebase Database не инициализирована');
+        customAlert('Ошибка: Firebase Database не инициализирована');
         return;
     }
     
@@ -828,7 +876,7 @@ function handleChatsError(error) {
             <small>Проверьте настройки Firebase</small>
         </div>`;
     }
-    alert('Ошибка Firebase: ' + error.message);
+    customAlert('Ошибка Firebase: ' + error.message);
 }
 
 function createChatItem(chat) {
@@ -938,7 +986,7 @@ async function openChat(userId, userData) {
     console.log('💬 Открытие чата с:', userData.name);
     
     if (blockedUsers.has(userId)) {
-        alert('Этот пользователь заблокирован');
+        customAlert('Этот пользователь заблокирован');
         return;
     }
     
@@ -1180,7 +1228,7 @@ async function sendMessage() {
         }).catch(err => console.error('Error getting other user chat:', err));
     } catch (error) {
         console.error('Error sending message:', error);
-        alert('Ошибка отправки сообщения. Попробуйте еще раз.');
+        customAlert('Ошибка отправки сообщения. Попробуйте еще раз.');
     } finally {
         sendBtn.disabled = false;
     }
@@ -1191,12 +1239,12 @@ async function handleMediaUpload(event) {
     if (!file || !currentChatUser) return;
     
     if (file.size > 10 * 1024 * 1024) {
-        alert('Файл слишком большой. Максимальный размер: 10MB');
+        customAlert('Файл слишком большой. Максимальный размер: 10MB');
         return;
     }
     
     if (!file.type.startsWith('image/')) {
-        alert('Поддерживаются только изображения');
+        customAlert('Поддерживаются только изображения');
         return;
     }
     
@@ -1247,7 +1295,7 @@ async function handleMediaUpload(event) {
                 await updateLastMessage('📷 Изображение');
             } catch (error) {
                 console.error('Error uploading image:', error);
-                alert('Ошибка загрузки изображения');
+                customAlert('Ошибка загрузки изображения');
             }
         };
         img.src = e.target.result;
@@ -1394,7 +1442,7 @@ async function openProfile(userId) {
 }
 
 async function deleteAccount() {
-    if (confirm('Вы уверены, что хотите удалить свой аккаунт? Это действие необратимо!')) {
+    if (customConfirm('Вы уверены, что хотите удалить свой аккаунт? Это действие необратимо!')) {
         try {
             const userRef = ref(database, `users/${currentUser.id}`);
             await remove(userRef);
@@ -1406,7 +1454,7 @@ async function deleteAccount() {
             location.reload();
         } catch (error) {
             console.error('Error deleting account:', error);
-            alert('Ошибка удаления аккаунта');
+            customAlert('Ошибка удаления аккаунта');
         }
     }
 }
@@ -1497,12 +1545,12 @@ async function toggleBlockUser() {
         const blockRef = ref(database, `users/${currentUser.id}/blockedUsers/${userId}`);
         await remove(blockRef);
         blockedUsers.delete(userId);
-        alert('Пользователь разблокирован');
+        customAlert('Пользователь разблокирован');
     } else {
         const blockRef = ref(database, `users/${currentUser.id}/blockedUsers/${userId}`);
         await set(blockRef, true);
         blockedUsers.add(userId);
-        alert('Пользователь заблокирован');
+        customAlert('Пользователь заблокирован');
     }
 
     const blockBtn = document.getElementById('blockUserBtn');
@@ -1551,7 +1599,7 @@ function uploadAvatar(event) {
     if (!file) return;
 
     if (file.size > 5 * 1024 * 1024) {
-        alert('Файл слишком большой. Максимальный размер: 5MB');
+        customAlert('Файл слишком большой. Максимальный размер: 5MB');
         return;
     }
 
@@ -1633,7 +1681,7 @@ async function saveProfile() {
         
     } catch (error) {
         console.error('Error saving profile:', error);
-        alert('Ошибка сохранения профиля. Попробуйте еще раз.');
+        customAlert('Ошибка сохранения профиля. Попробуйте еще раз.');
     }
 }
 
@@ -1662,7 +1710,7 @@ async function kickUser() {
     const userId = document.getElementById('profileModal').dataset.userId;
     if (!userId || !isDeveloper) return;
     
-    if (confirm('Вы уверены, что хотите кикнуть этого пользователя?')) {
+    if (customConfirm('Вы уверены, что хотите кикнуть этого пользователя?')) {
         try {
             const userRef = ref(database, `users/${userId}`);
             await remove(userRef);
@@ -1804,17 +1852,43 @@ function closeSidebar() {
 async function clearCurrentChat() {
     if (!currentChatUser) return;
     
-    if (confirm('Удалить все сообщения в этом чате?')) {
-        const chatId = getChatId(currentUser.id, currentChatUser.id);
-        const messagesRef = ref(database, `messages/${chatId}`);
-        await remove(messagesRef);
-        existingMessages.clear();
-        document.getElementById('messagesContainer').innerHTML = '';
+    const customConfirmed = await customConfirm('Удалить все сообщения в этом чате?');
+    
+    if (customConfirmed) {
+        try {
+            const chatId = getChatId(currentUser.id, currentChatUser.id);
+            const messagesRef = ref(database, `messages/${chatId}`);
+            await remove(messagesRef);
+            
+            const userChatRef = ref(database, `userChats/${currentUser.id}/${currentChatUser.id}`);
+            const otherUserChatRef = ref(database, `userChats/${currentChatUser.id}/${currentUser.id}`);
+            
+            await update(userChatRef, {
+                lastMessage: '',
+                lastMessageTime: Date.now(),
+                lastMessageSender: '',
+                unread: 0
+            });
+            
+            await update(otherUserChatRef, {
+                lastMessage: '',
+                lastMessageTime: Date.now(),
+                lastMessageSender: '',
+                unread: 0
+            });
+            
+            existingMessages.clear();
+            document.getElementById('messagesContainer').innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Чат очищен</div>';
+            
+            await customAlert('Чат успешно очищен!');
+        } catch (error) {
+            console.error('Ошибка очистки чата:', error);
+            await customAlert('Ошибка при очистке чата');
+        }
     }
 }
-
 async function logout() {
-    if (confirm('Вы уверены, что хотите выйти?')) {
+    if (customConfirm('Вы уверены, что хотите выйти?')) {
         try {
             if (currentUser) {
                 const userRef = ref(database, `users/${currentUser.id}`);
