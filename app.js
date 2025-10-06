@@ -182,12 +182,22 @@ function setupEventListeners() {
 
 function backToChats() {
     if (window.innerWidth <= 768) {
+        const welcomeScreen = document.getElementById('welcomeScreen');
+        const chatHeader = document.getElementById('chatHeader');
+        const messagesContainer = document.getElementById('messagesContainer');
+        const messageInputContainer = document.getElementById('messageInputContainer');
+        
+
+        chatHeader.classList.remove('view-visible');
+        messagesContainer.classList.remove('view-visible');
+        messageInputContainer.classList.remove('view-visible');
+        
+
+        welcomeScreen.classList.remove('view-hidden');
+        
+
         document.getElementById('sidebar').classList.remove('hidden');
         document.getElementById('chatArea').classList.remove('active');
-        document.getElementById('chatHeader').classList.remove('view-visible');
-        document.getElementById('messagesContainer').classList.remove('view-visible');
-        document.getElementById('messageInputContainer').classList.remove('view-visible');
-        document.getElementById('welcomeScreen').classList.remove('view-hidden');
         document.getElementById('mobileNav').classList.remove('in-chat');
         
         const toggleBtn = document.getElementById('mobileNavToggle');
@@ -925,9 +935,7 @@ async function searchUsers() {
 }
 
 async function openChat(userId, userData) {
-    console.log('💬 === ОТКРЫТИЕ ЧАТА ===');
-    console.log('👤 userId:', userId);
-    console.log('📊 userData:', userData);
+    console.log('💬 Открытие чата с:', userData.name);
     
     if (blockedUsers.has(userId)) {
         alert('Этот пользователь заблокирован');
@@ -935,18 +943,28 @@ async function openChat(userId, userData) {
     }
     
     currentChatUser = { id: userId, ...userData };
-    console.log('✅ currentChatUser установлен:', currentChatUser);
     
 
     existingMessages.clear();
     const container = document.getElementById('messagesContainer');
-    container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">⏳ Загрузка сообщений...</div>';
+    container.innerHTML = '';
+
+    const welcomeScreen = document.getElementById('welcomeScreen');
+    const chatHeader = document.getElementById('chatHeader');
+    const messagesContainer = document.getElementById('messagesContainer');
+    const messageInputContainer = document.getElementById('messageInputContainer');
     
 
-    document.getElementById('welcomeScreen').classList.add('view-hidden');
-    document.getElementById('chatHeader').classList.add('view-visible');
-    document.getElementById('messagesContainer').classList.add('view-visible');
-    document.getElementById('messageInputContainer').classList.add('view-visible');
+    welcomeScreen.classList.add('view-hidden');
+    
+
+    chatHeader.classList.add('view-visible');
+    messagesContainer.classList.add('view-visible');
+    messageInputContainer.classList.add('view-visible');
+    
+    console.log('✅ Классы добавлены');
+    console.log('chatHeader display:', window.getComputedStyle(chatHeader).display);
+    console.log('messagesContainer display:', window.getComputedStyle(messagesContainer).display);
     
     if (window.innerWidth <= 768) {
         document.getElementById('sidebar').classList.add('hidden');
@@ -975,7 +993,7 @@ async function openChat(userId, userData) {
     
     document.getElementById('chatUserName').innerHTML = (userData.name || 'User') + (userData.isDeveloper ? ' <span class="developer-badge">DEV</span>' : '');
     
-
+    // Статус пользователя
     const statusRef = ref(database, `users/${userId}`);
     onValue(statusRef, (snapshot) => {
         const user = snapshot.val();
@@ -987,9 +1005,10 @@ async function openChat(userId, userData) {
     
     await markAsRead(userId);
     
-    console.log('🔍 Загрузка сообщений...');
+    console.log('🔍 Загружаем сообщения...');
     loadMessages(userId);
     
+
     document.querySelectorAll('.chat-item').forEach(item => item.classList.remove('active'));
     const activeChat = document.querySelector(`[data-user-id="${userId}"]`);
     if (activeChat) activeChat.classList.add('active');
