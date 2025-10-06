@@ -54,21 +54,35 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function checkExistingUser() {
+    console.log('🔍 Шаг 1: Проверка существующего пользователя...');
     const savedUser = localStorage.getItem('waveUser');
+    
     if (savedUser) {
+        console.log('✅ Найден сохраненный пользователь:', savedUser);
         currentUser = JSON.parse(savedUser);
         isDeveloper = currentUser.isDeveloper || false;
         
-        get(ref(database, `users/${currentUser.id}`)).then(snapshot => {
-            if (snapshot.exists()) {
-                document.getElementById('loginModal').classList.add('hidden');
-                updateUserUI();
-                initApp();
-            } else {
-                localStorage.removeItem('waveUser');
-                currentUser = null;
-            }
-        });
+        console.log('🔍 Шаг 2: Проверка пользователя в Firebase...');
+        get(ref(database, `users/${currentUser.id}`))
+            .then(snapshot => {
+                if (snapshot.exists()) {
+                    console.log('✅ Пользователь найден в Firebase:', snapshot.val());
+                    document.getElementById('loginModal').classList.add('hidden');
+                    updateUserUI();
+                    console.log('🔍 Шаг 3: Инициализация приложения...');
+                    initApp();
+                } else {
+                    console.error('❌ Пользователь не найден в Firebase');
+                    localStorage.removeItem('waveUser');
+                    currentUser = null;
+                }
+            })
+            .catch(error => {
+                console.error('❌ Ошибка проверки Firebase:', error);
+                alert('Ошибка подключения к Firebase: ' + error.message);
+            });
+    } else {
+        console.log('ℹ️ Сохраненный пользователь не найден');
     }
 }
 
