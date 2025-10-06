@@ -39,6 +39,18 @@ fetch('https://api.ipify.org?format=json')
         userIP = 'Unknown';
     });
 
+if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/service-worker.js')
+            .then(registration => {
+                console.log('✅ SW registered:', registration);
+            })
+            .catch(error => {
+                console.log('❌ SW registration failed:', error);
+            });
+    });
+}
+
 function showNotification(title, message, buttons = []) {
     const modal = document.getElementById('customNotification');
     const titleEl = document.getElementById('notificationTitle');
