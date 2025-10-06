@@ -740,6 +740,10 @@ input:checked + .theme-slider:before {
     gap: 8px;
 }
 
+.mobile-search-btn {
+    display: none;
+}
+
 .mobile-profile-btn,
 .mobile-settings-btn {
     display: none;
@@ -771,7 +775,6 @@ input:checked + .theme-slider:before {
     border-color: var(--primary);
     transform: rotate(90deg);
 }
-
 .user-info {
     display: flex;
     align-items: center;
@@ -2347,12 +2350,17 @@ input:checked + .theme-slider:before {
         height: 40px !important;
         font-size: 18px !important;
     }
+
+    .mobile-search-btn {
+        display: flex !important;
+    }
     
     .user-info {
         display: none;
     }
     
     .app-title {
+        flex: 1;
         justify-content: center;
     }
 }
