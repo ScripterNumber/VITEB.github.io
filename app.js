@@ -39,10 +39,12 @@ fetch('https://api.ipify.org?format=json')
     });
 
 document.addEventListener('DOMContentLoaded', () => {
+    loadTheme();
     checkExistingUser();
     setupEventListeners();
     setupMobileNav();
     setupChatContextMenu();
+    setupSettings();
     handleViewportChange();
     window.addEventListener('resize', handleViewportChange);
     window.addEventListener('orientationchange', handleViewportChange);
@@ -139,14 +141,11 @@ function setupEventListeners() {
 
     document.getElementById('menuToggleBtn').addEventListener('click', toggleSidebar);
     
-    document.getElementById('backToChatBtn').addEventListener('click', (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        backToChats();
+    document.getElementById('chatOptionsBtn').addEventListener('click', toggleChatOptionsMenu);
+    document.getElementById('clearChatMenuBtn').addEventListener('click', () => {
+        hideChatOptionsMenu();
+        clearCurrentChat();
     });
-    
-    document.getElementById('logoutBtn').addEventListener('click', logout);
-    document.getElementById('clearChatBtn').addEventListener('click', clearCurrentChat);
     document.getElementById('chatUserInfo').addEventListener('click', () => {
         if (currentChatUser) openProfile(currentChatUser.id);
     });
@@ -159,16 +158,27 @@ function setupEventListeners() {
     document.getElementById('closeImageViewerBtn').addEventListener('click', closeImageViewer);
 
     document.addEventListener('click', hideMessageMenu);
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.chat-options-menu') && !e.target.closest('#chatOptionsBtn')) {
+            hideChatOptionsMenu();
+        }
+    });
 }
 
 function backToChats() {
     if (window.innerWidth <= 768) {
         document.getElementById('sidebar').classList.remove('hidden');
         document.getElementById('chatArea').classList.remove('active');
-        document.getElementById('chatHeader').style.display = 'none';
-        document.getElementById('messagesContainer').style.display = 'none';
-        document.getElementById('messageInputContainer').style.display = 'none';
-        document.getElementById('welcomeScreen').style.display = 'flex';
+        document.getElementById('chatHeader').classList.remove('view-visible');
+        document.getElementById('messagesContainer').classList.remove('view-visible');
+        document.getElementById('messageInputContainer').classList.remove('view-visible');
+        document.getElementById('welcomeScreen').classList.remove('view-hidden');
+        document.getElementById('mobileNav').classList.remove('in-chat');
+        
+        const toggleBtn = document.getElementById('mobileNavToggle');
+        if (toggleBtn) {
+            toggleBtn.classList.remove('in-chat');
+        }
         
         currentChatUser = null;
         
@@ -177,22 +187,65 @@ function backToChats() {
             messagesListener = null;
         }
         
-        document.getElementById('mobileNav').style.display = 'flex';
-        
         const messageInput = document.getElementById('messageInput');
         if (messageInput) {
             messageInput.blur();
         }
-    } else {
-        closeSidebar();
     }
 }
 
-function handleViewportChange() {
-    if (window.innerWidth <= 768) {
-        const vh = window.innerHeight * 0.01;
-        document.documentElement.style.setProperty('--vh', `${vh}px`);
+function loadTheme() {
+    const savedTheme = localStorage.getItem('waveTheme');
+    if (savedTheme === 'dark') {
+        document.body.classList.add('dark-theme');
+    } else if (!savedTheme) {
+        localStorage.setItem('waveTheme', 'light');
     }
+}
+
+function setupSettings() {
+    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsModal = document.getElementById('settingsModal');
+    const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+    const themeToggle = document.getElementById('themeToggle');
+    
+    if (!settingsBtn || !settingsModal || !closeSettingsBtn || !themeToggle) {
+        return;
+    }
+    
+    const savedTheme = localStorage.getItem('waveTheme');
+    if (savedTheme === 'dark') {
+        themeToggle.checked = true;
+    }
+    
+    settingsBtn.addEventListener('click', () => {
+        settingsModal.classList.remove('hidden');
+    });
+    
+    closeSettingsBtn.addEventListener('click', () => {
+        settingsModal.classList.add('hidden');
+    });
+    
+    settingsModal.addEventListener('click', (e) => {
+        if (e.target === settingsModal) {
+            settingsModal.classList.add('hidden');
+        }
+    });
+    
+    themeToggle.addEventListener('change', () => {
+        if (themeToggle.checked) {
+            document.body.classList.add('dark-theme');
+            localStorage.setItem('waveTheme', 'dark');
+        } else {
+            document.body.classList.remove('dark-theme');
+            localStorage.setItem('waveTheme', 'light');
+        }
+    });
+}
+
+function handleViewportChange() {
+    const vh = window.innerHeight * 0.01;
+    document.documentElement.style.setProperty('--vh', `${vh}px`);
 }
 
 function setupMobileNav() {
@@ -216,19 +269,42 @@ function setupMobileNav() {
         checkChats();
         
         document.getElementById('navChats').addEventListener('click', () => {
+            if (currentChatUser) {
+                backToChats();
+            }
             showMobileView('chats');
-            document.getElementById('sidebar').classList.remove('hidden');
-            document.getElementById('chatArea').classList.remove('active');
         });
         
         document.getElementById('navSearch').addEventListener('click', () => {
+            if (currentChatUser) {
+                document.getElementById('sidebar').classList.remove('hidden');
+                document.getElementById('chatArea').classList.remove('active');
+                
+                currentChatUser = null;
+                if (messagesListener) {
+                    messagesListener();
+                    messagesListener = null;
+                }
+            }
             showMobileView('search');
-            document.getElementById('sidebar').classList.remove('hidden');
-            document.getElementById('chatArea').classList.remove('active');
         });
         
         document.getElementById('navProfile').addEventListener('click', () => {
             openProfile(currentUser.id);
+        });
+
+        const mobileNavToggle = document.getElementById('mobileNavToggle');
+        const savedNavState = localStorage.getItem('mobileNavVisible');
+        
+        if (savedNavState === 'false') {
+            mobileNav.classList.add('hidden');
+            mobileNavToggle.classList.add('nav-hidden');
+        }
+
+        mobileNavToggle.addEventListener('click', () => {
+            const isHidden = mobileNav.classList.toggle('hidden');
+            mobileNavToggle.classList.toggle('nav-hidden');
+            localStorage.setItem('mobileNavVisible', isHidden ? 'false' : 'true');
         });
     }
 }
@@ -320,10 +396,10 @@ async function deleteChat() {
             
             if (currentChatUser && currentChatUser.id === userId) {
                 currentChatUser = null;
-                document.getElementById('welcomeScreen').style.display = 'flex';
-                document.getElementById('chatHeader').style.display = 'none';
-                document.getElementById('messagesContainer').style.display = 'none';
-                document.getElementById('messageInputContainer').style.display = 'none';
+                document.getElementById('welcomeScreen').classList.remove('view-hidden');
+                document.getElementById('chatHeader').classList.remove('view-visible');
+                document.getElementById('messagesContainer').classList.remove('view-visible');
+                document.getElementById('messageInputContainer').classList.remove('view-visible');
             }
         } catch (error) {
             console.error('Error deleting chat:', error);
@@ -516,7 +592,7 @@ async function register() {
 function updateUserUI() {
     if (!currentUser) return;
     
-    document.getElementById('currentUserName').textContent = currentUser.name;
+    document.getElementById('currentUserName').textContent = currentUser.name || 'User';
     const avatar = document.getElementById('currentUserAvatar');
     
     if (currentUser.avatarImage) {
@@ -524,7 +600,7 @@ function updateUserUI() {
         avatar.className = 'user-avatar';
     } else {
         const avatarText = document.getElementById('currentUserAvatarText');
-        avatarText.textContent = currentUser.name.charAt(0).toUpperCase();
+        avatarText.textContent = (currentUser.name || 'U').charAt(0).toUpperCase();
         avatar.className = `user-avatar avatar-gradient-${currentUser.avatar || 1}`;
     }
 }
@@ -607,10 +683,6 @@ async function loadChats() {
             const chatItem = createChatItem(chat);
             container.appendChild(chatItem);
         });
-
-        if (window.innerWidth <= 768 && chatArray.length > 0) {
-            document.getElementById('mobileNav').style.display = 'flex';
-        }
     });
 }
 
@@ -627,7 +699,7 @@ function createChatItem(chat) {
     if (chat.userData.avatarImage) {
         avatarHtml = `<img src="${chat.userData.avatarImage}" alt="">`;
     } else {
-        avatarHtml = chat.userData.name.charAt(0).toUpperCase();
+        avatarHtml = (chat.userData.name || 'U').charAt(0).toUpperCase();
     }
     
     const time = chat.lastMessageTime ? formatTime(chat.lastMessageTime) : '';
@@ -643,8 +715,8 @@ function createChatItem(chat) {
             ${avatarHtml}
         </div>
         <div class="chat-item-info">
-            <div class="chat-item-name">${chat.userData.name}${chat.userData.isDeveloper ? ' <span class="developer-badge">DEV</span>' : ''}</div>
-            <div class="chat-item-last-message">${lastMessageDisplay}</div>
+            <div class="chat-item-name">${chat.userData.name || 'User'}${chat.userData.isDeveloper ? ' <span class="developer-badge">DEV</span>' : ''}</div>
+            <div class="chat-item-last-message">${lastMessageDisplay || ''}</div>
         </div>
         <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 5px;">
             <div class="chat-item-time">${time}</div>
@@ -691,7 +763,7 @@ async function searchUsers() {
                 if (userData.avatarImage) {
                     avatarHtml = `<img src="${userData.avatarImage}" alt="">`;
                 } else {
-                    avatarHtml = userData.name ? userData.name.charAt(0).toUpperCase() : '?';
+                    avatarHtml = (userData.name || '?').charAt(0).toUpperCase();
                 }
                 
                 resultItem.innerHTML = `
@@ -728,20 +800,24 @@ async function openChat(userId, userData) {
     existingMessages.clear();
     document.getElementById('messagesContainer').innerHTML = '';
     
+    document.getElementById('welcomeScreen').classList.add('view-hidden');
+    document.getElementById('chatHeader').classList.add('view-visible');
+    document.getElementById('messagesContainer').classList.add('view-visible');
+    document.getElementById('messageInputContainer').classList.add('view-visible');
+    
     if (window.innerWidth <= 768) {
         document.getElementById('sidebar').classList.add('hidden');
         document.getElementById('chatArea').classList.add('active');
-        document.getElementById('mobileNav').style.display = 'none';
+        document.getElementById('mobileNav').classList.add('in-chat');
         
-        document.getElementById('welcomeScreen').style.display = 'none';
-        document.getElementById('chatHeader').style.display = 'flex';
-        document.getElementById('messagesContainer').style.display = 'flex';
-        document.getElementById('messageInputContainer').style.display = 'block';
+        const toggleBtn = document.getElementById('mobileNavToggle');
+        if (toggleBtn) {
+            toggleBtn.classList.add('in-chat');
+        }
     } else {
-        document.getElementById('welcomeScreen').style.display = 'none';
-        document.getElementById('chatHeader').style.display = 'flex';
-        document.getElementById('messagesContainer').style.display = 'flex';
-        document.getElementById('messageInputContainer').style.display = 'block';
+        setTimeout(() => {
+            document.getElementById('messageInput').focus();
+        }, 100);
     }
     
     const chatAvatar = document.getElementById('chatUserAvatar');
@@ -749,11 +825,11 @@ async function openChat(userId, userData) {
         chatAvatar.innerHTML = `<img src="${userData.avatarImage}" alt="">`;
         chatAvatar.className = 'chat-user-avatar';
     } else {
-        chatAvatar.innerHTML = userData.name.charAt(0).toUpperCase();
+        chatAvatar.innerHTML = (userData.name || 'U').charAt(0).toUpperCase();
         chatAvatar.className = `chat-user-avatar avatar-gradient-${userData.avatar || 1}`;
     }
     
-    document.getElementById('chatUserName').innerHTML = userData.name + (userData.isDeveloper ? ' <span class="developer-badge">DEV</span>' : '');
+    document.getElementById('chatUserName').innerHTML = (userData.name || 'User') + (userData.isDeveloper ? ' <span class="developer-badge">DEV</span>' : '');
     
     const statusRef = ref(database, `users/${userId}`);
     onValue(statusRef, (snapshot) => {
@@ -887,50 +963,53 @@ async function sendMessage() {
     if (sendBtn.disabled) return;
     sendBtn.disabled = true;
     
+    const chatId = getChatId(currentUser.id, currentChatUser.id);
+    const messagesRef = ref(database, `messages/${chatId}`);
+    
+    const messageData = {
+        userId: currentUser.id,
+        userName: currentUser.name,
+        userAvatarGradient: currentUser.avatar,
+        userAvatar: currentUser.avatarImage || null,
+        text: text,
+        timestamp: Date.now(),
+        isDeveloper: currentUser.isDeveloper || false
+    };
+    
+    if (currentReply) {
+        messageData.replyTo = currentReply;
+        cancelReply();
+    }
+    
     try {
-        const chatId = getChatId(currentUser.id, currentChatUser.id);
-        const messagesRef = ref(database, `messages/${chatId}`);
-        
-        const messageData = {
-            userId: currentUser.id,
-            userName: currentUser.name,
-            userAvatarGradient: currentUser.avatar,
-            userAvatar: currentUser.avatarImage || null,
-            text: text,
-            timestamp: Date.now(),
-            isDeveloper: currentUser.isDeveloper || false
-        };
-        
-        if (currentReply) {
-            messageData.replyTo = currentReply;
-            cancelReply();
-        }
-        
         await push(messagesRef, messageData);
-
-        const userChatRef = ref(database, `userChats/${currentUser.id}/${currentChatUser.id}`);
-        const otherUserChatRef = ref(database, `userChats/${currentChatUser.id}/${currentUser.id}`);
-
-        await set(userChatRef, {
-            lastMessage: text,
-            lastMessageTime: Date.now(),
-            lastMessageSender: currentUser.id,
-            unread: 0
-        });
-
-        const otherSnapshot = await get(otherUserChatRef);
-        const unreadCount = otherSnapshot.exists() ? (otherSnapshot.val().unread || 0) + 1 : 1;
-        
-        await set(otherUserChatRef, {
-            lastMessage: text,
-            lastMessageTime: Date.now(),
-            lastMessageSender: currentUser.id,
-            unread: unreadCount
-        });
         
         input.value = '';
         input.style.height = 'auto';
         
+        if (window.innerWidth > 768) {
+            input.focus();
+        }
+
+        const userChatRef = ref(database, `userChats/${currentUser.id}/${currentChatUser.id}`);
+        const otherUserChatRef = ref(database, `userChats/${currentChatUser.id}/${currentUser.id}`);
+
+        set(userChatRef, {
+            lastMessage: text,
+            lastMessageTime: Date.now(),
+            lastMessageSender: currentUser.id,
+            unread: 0
+        }).catch(err => console.error('Error updating user chat:', err));
+
+        get(otherUserChatRef).then(otherSnapshot => {
+            const unreadCount = otherSnapshot.exists() ? (otherSnapshot.val().unread || 0) + 1 : 1;
+            set(otherUserChatRef, {
+                lastMessage: text,
+                lastMessageTime: Date.now(),
+                lastMessageSender: currentUser.id,
+                unread: unreadCount
+            }).catch(err => console.error('Error updating other user chat:', err));
+        }).catch(err => console.error('Error getting other user chat:', err));
     } catch (error) {
         console.error('Error sending message:', error);
         alert('Ошибка отправки сообщения. Попробуйте еще раз.');
@@ -1065,11 +1144,11 @@ async function openProfile(userId) {
             avatar.innerHTML = `<img src="${userData.avatarImage}" alt="">`;
             avatar.className = 'profile-avatar-large';
         } else {
-            avatar.innerHTML = `<span id="profileAvatarText">${userData.name.charAt(0).toUpperCase()}</span>`;
+            avatar.innerHTML = `<span id="profileAvatarText">${(userData.name || 'U').charAt(0).toUpperCase()}</span>`;
             avatar.className = `profile-avatar-large avatar-gradient-${userData.avatar || 1}`;
         }
         
-        document.getElementById('profileName').innerHTML = userData.name + (userData.isDeveloper ? ' <span class="developer-badge">DEV</span>' : '');
+        document.getElementById('profileName').innerHTML = (userData.name || 'User') + (userData.isDeveloper ? ' <span class="developer-badge">DEV</span>' : '');
         
         const usernameDiv = document.getElementById('profileUsername');
         if (userData.username) {
@@ -1424,10 +1503,10 @@ async function kickUser() {
             
             if (currentChatUser && currentChatUser.id === userId) {
                 currentChatUser = null;
-                document.getElementById('welcomeScreen').style.display = 'flex';
-                document.getElementById('chatHeader').style.display = 'none';
-                document.getElementById('messagesContainer').style.display = 'none';
-                document.getElementById('messageInputContainer').style.display = 'none';
+                document.getElementById('welcomeScreen').classList.remove('view-hidden');
+                document.getElementById('chatHeader').classList.remove('view-visible');
+                document.getElementById('messagesContainer').classList.remove('view-visible');
+                document.getElementById('messageInputContainer').classList.remove('view-visible');
             }
             
         } catch (error) {
@@ -1471,6 +1550,26 @@ window.showMessageMenu = function(event, msgId, author, text, isOwn) {
 
 function hideMessageMenu() {
     document.getElementById('messageMenu').classList.remove('show');
+}
+
+function toggleChatOptionsMenu(e) {
+    e.stopPropagation();
+    const menu = document.getElementById('chatOptionsMenu');
+    
+    if (menu.classList.contains('show')) {
+        hideChatOptionsMenu();
+    } else {
+        const button = e.currentTarget;
+        const rect = button.getBoundingClientRect();
+        
+        menu.style.top = (rect.bottom + 5) + 'px';
+        menu.style.right = '10px';
+        menu.classList.add('show');
+    }
+}
+
+function hideChatOptionsMenu() {
+    document.getElementById('chatOptionsMenu').classList.remove('show');
 }
 
 function copyMessage() {
@@ -1523,7 +1622,11 @@ function closeImageViewer() {
 }
 
 function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('open');
+    if (window.innerWidth <= 768) {
+        backToChats();
+    } else {
+        document.getElementById('sidebar').classList.toggle('open');
+    }
 }
 
 function closeSidebar() {
