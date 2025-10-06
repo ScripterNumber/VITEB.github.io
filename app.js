@@ -28,7 +28,6 @@ let blockedUsers = new Set();
 let userIP = null;
 let contextMenuTarget = null;
 let longPressTimer = null;
-let currentView = 'chats';
 
 fetch('https://api.ipify.org?format=json')
     .then(response => response.json())
@@ -84,7 +83,6 @@ function customAlert(message) {
     ]);
 }
 
-
 function customConfirm(message) {
     return showNotification('Подтверждение', message, [
         { text: 'Отмена', type: 'secondary', onClick: () => false },
@@ -96,7 +94,6 @@ document.addEventListener('DOMContentLoaded', () => {
     loadTheme();
     checkExistingUser();
     setupEventListeners();
-    setupMobileNav();
     setupChatContextMenu();
     setupSettings();
     handleViewportChange();
@@ -106,8 +103,6 @@ document.addEventListener('DOMContentLoaded', () => {
         window.visualViewport.addEventListener('resize', handleViewportChange);
     }
 });
-
-
 
 function checkExistingUser() {
     console.log('🔍 Шаг 1: Проверка существующего пользователя...');
@@ -172,6 +167,7 @@ function setupEventListeners() {
     });
 
     document.getElementById('currentUserInfo').addEventListener('click', () => openProfile(currentUser.id));
+    document.getElementById('mobileProfileBtn')?.addEventListener('click', () => openProfile(currentUser.id));
     document.getElementById('profileAvatar').addEventListener('click', (e) => {
         e.preventDefault();
     });
@@ -242,23 +238,14 @@ function backToChats() {
         const messagesContainer = document.getElementById('messagesContainer');
         const messageInputContainer = document.getElementById('messageInputContainer');
         
-
         chatHeader.classList.remove('view-visible');
         messagesContainer.classList.remove('view-visible');
         messageInputContainer.classList.remove('view-visible');
         
-
         welcomeScreen.classList.remove('view-hidden');
         
-
         document.getElementById('sidebar').classList.remove('hidden');
         document.getElementById('chatArea').classList.remove('active');
-        document.getElementById('mobileNav').classList.remove('in-chat');
-        
-        const toggleBtn = document.getElementById('mobileNavToggle');
-        if (toggleBtn) {
-            toggleBtn.classList.remove('in-chat');
-        }
         
         currentChatUser = null;
         
@@ -285,11 +272,12 @@ function loadTheme() {
 
 function setupSettings() {
     const settingsBtn = document.getElementById('settingsBtn');
+    const mobileSettingsBtn = document.getElementById('mobileSettingsBtn');
     const settingsModal = document.getElementById('settingsModal');
     const closeSettingsBtn = document.getElementById('closeSettingsBtn');
     const themeToggle = document.getElementById('themeToggle');
     
-    if (!settingsBtn || !settingsModal || !closeSettingsBtn || !themeToggle) {
+    if (!settingsModal || !closeSettingsBtn || !themeToggle) {
         return;
     }
     
@@ -298,9 +286,17 @@ function setupSettings() {
         themeToggle.checked = true;
     }
     
-    settingsBtn.addEventListener('click', () => {
+    const openSettings = () => {
         settingsModal.classList.remove('hidden');
-    });
+    };
+    
+    if (settingsBtn) {
+        settingsBtn.addEventListener('click', openSettings);
+    }
+    
+    if (mobileSettingsBtn) {
+        mobileSettingsBtn.addEventListener('click', openSettings);
+    }
     
     closeSettingsBtn.addEventListener('click', () => {
         settingsModal.classList.add('hidden');
@@ -326,91 +322,6 @@ function setupSettings() {
 function handleViewportChange() {
     const vh = window.innerHeight * 0.01;
     document.documentElement.style.setProperty('--vh', `${vh}px`);
-}
-
-function setupMobileNav() {
-    if (window.innerWidth <= 768) {
-        const mobileNav = document.getElementById('mobileNav');
-        const toggleBtn = document.getElementById('mobileNavToggle');
-
-
-        const updateNavVisibility = (snapshot) => {
-            const chats = snapshot.val() || {};
-            const hasChats = Object.keys(chats).length > 0;
-
-            if (hasChats && !currentChatUser) {
-                mobileNav.classList.add('show');
-                toggleBtn.style.display = 'flex';
-            } else if (!hasChats) {
-                mobileNav.classList.remove('show');
-                toggleBtn.style.display = 'none';
-            }
-        };
-
-
-        if (currentUser) {
-            const chatsRef = ref(database, `userChats/${currentUser.id}`);
-            onValue(chatsRef, updateNavVisibility);
-        }
-        
-
-        const savedNavState = localStorage.getItem('mobileNavVisible');
-        
-        if (savedNavState === 'false') {
-            mobileNav.classList.add('hidden');
-            toggleBtn.classList.add('nav-hidden');
-            toggleBtn.classList.remove('nav-visible');
-        } else {
-            mobileNav.classList.remove('hidden');
-            toggleBtn.classList.remove('nav-hidden');
-            toggleBtn.classList.add('nav-visible');
-        }
-
-
-        toggleBtn.addEventListener('click', () => {
-            const isHidden = mobileNav.classList.toggle('hidden');
-            toggleBtn.classList.toggle('nav-hidden');
-            toggleBtn.classList.toggle('nav-visible');
-            localStorage.setItem('mobileNavVisible', isHidden ? 'false' : 'true');
-        });
-        
-
-        document.getElementById('navChats').addEventListener('click', () => {
-            if (currentChatUser) {
-                backToChats();
-            }
-            showMobileView('chats');
-        });
-        
-        document.getElementById('navSearch').addEventListener('click', () => {
-            if (currentChatUser) {
-                backToChats();
-            }
-            showMobileView('search');
-        });
-        
-        document.getElementById('navProfile').addEventListener('click', () => {
-            openProfile(currentUser.id);
-        });
-    }
-}
-
-function showMobileView(view) {
-    currentView = view;
-    
-    document.querySelectorAll('.nav-item').forEach(item => {
-        item.classList.remove('active');
-    });
-    
-    if (view === 'chats') {
-        document.getElementById('navChats').classList.add('active');
-        document.getElementById('searchContainer').classList.remove('active');
-        document.getElementById('chatsList').classList.remove('hidden');
-    } else if (view === 'search') {
-        document.getElementById('navSearch').classList.add('active');
-        document.getElementById('searchContainer').classList.add('active');
-        document.getElementById('chatsList').classList.add('hidden');
-    }
 }
 
 function setupChatContextMenu() {
@@ -767,13 +678,11 @@ async function loadChats() {
     const chatsRef = ref(database, `userChats/${currentUser.id}`);
     console.log('📍 Путь к чатам:', `userChats/${currentUser.id}`);
     
-
     if (window.chatsListener) {
         console.log('🔄 Отписка от предыдущего listener');
         window.chatsListener();
     }
     
-
     try {
         console.log('🔍 Попытка получить чаты через get()...');
         const snapshot = await get(chatsRef);
@@ -783,13 +692,10 @@ async function loadChats() {
         if (!snapshot.exists()) {
             console.log('ℹ️ Нет чатов в базе данных');
             container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--text-secondary);">Нет чатов. Найдите пользователей через поиск!</div>';
-            
-
             window.chatsListener = onValue(chatsRef, handleChatsUpdate, handleChatsError);
             return;
         }
         
-
         window.chatsListener = onValue(chatsRef, handleChatsUpdate, handleChatsError);
         
     } catch (error) {
@@ -859,13 +765,10 @@ async function handleChatsUpdate(snapshot) {
             return;
         }
         
-        // Сортируем по времени последнего сообщения
         const sortedChats = validChats.sort((a, b) => b.lastMessageTime - a.lastMessageTime);
         
-        // Очищаем контейнер
         container.innerHTML = '';
         
-        // Создаем элементы чатов
         sortedChats.forEach((chat, index) => {
             console.log(`🎨 Создание чата #${index + 1}:`, chat);
             const chatItem = createChatItem(chat);
@@ -880,7 +783,6 @@ async function handleChatsUpdate(snapshot) {
     }
 }
 
-// Обработчик ошибок для onValue
 function handleChatsError(error) {
     console.error('❌ Firebase onValue ошибка:', error);
     const container = document.getElementById('chatsContainer');
@@ -1017,22 +919,18 @@ async function openChat(userId, userData) {
     const messageInputContainer = document.getElementById('messageInputContainer');
     
     welcomeScreen.classList.add('view-hidden');
+    
     chatHeader.classList.add('view-visible');
     messagesContainer.classList.add('view-visible');
     messageInputContainer.classList.add('view-visible');
     
+    console.log('✅ Классы добавлены');
+    console.log('chatHeader display:', window.getComputedStyle(chatHeader).display);
+    console.log('messagesContainer display:', window.getComputedStyle(messagesContainer).display);
+    
     if (window.innerWidth <= 768) {
         document.getElementById('sidebar').classList.add('hidden');
         document.getElementById('chatArea').classList.add('active');
-        
-
-        const mobileNav = document.getElementById('mobileNav');
-        const toggleBtn = document.getElementById('mobileNavToggle');
-        
-        mobileNav.classList.add('in-chat');
-        if (toggleBtn) {
-            toggleBtn.classList.add('in-chat');
-        }
     } else {
         setTimeout(() => {
             document.getElementById('messageInput').focus();
@@ -1235,7 +1133,7 @@ async function sendMessage() {
         }).catch(err => console.error('Error getting other user chat:', err));
     } catch (error) {
         console.error('Error sending message:', error);
-        customAlert('Ошибка отправки сообщения. Попробуйте еще раз.');
+        await customAlert('Ошибка отправки сообщения. Попробуйте еще раз.');
     } finally {
         sendBtn.disabled = false;
     }
@@ -1246,12 +1144,12 @@ async function handleMediaUpload(event) {
     if (!file || !currentChatUser) return;
     
     if (file.size > 10 * 1024 * 1024) {
-        customAlert('Файл слишком большой. Максимальный размер: 10MB');
+        await customAlert('Файл слишком большой. Максимальный размер: 10MB');
         return;
     }
     
     if (!file.type.startsWith('image/')) {
-        customAlert('Поддерживаются только изображения');
+        await customAlert('Поддерживаются только изображения');
         return;
     }
     
@@ -1302,7 +1200,7 @@ async function handleMediaUpload(event) {
                 await updateLastMessage('📷 Изображение');
             } catch (error) {
                 console.error('Error uploading image:', error);
-                customAlert('Ошибка загрузки изображения');
+                await customAlert('Ошибка загрузки изображения');
             }
         };
         img.src = e.target.result;
@@ -1554,12 +1452,12 @@ async function toggleBlockUser() {
         const blockRef = ref(database, `users/${currentUser.id}/blockedUsers/${userId}`);
         await remove(blockRef);
         blockedUsers.delete(userId);
-        customAlert('Пользователь разблокирован');
+        await customAlert('Пользователь разблокирован');
     } else {
         const blockRef = ref(database, `users/${currentUser.id}/blockedUsers/${userId}`);
         await set(blockRef, true);
         blockedUsers.add(userId);
-        customAlert('Пользователь заблокирован');
+        await customAlert('Пользователь заблокирован');
     }
 
     const blockBtn = document.getElementById('blockUserBtn');
@@ -1570,10 +1468,10 @@ async function toggleBlockUser() {
 
     if (!isBlocked && currentChatUser && currentChatUser.id === userId) {
         currentChatUser = null;
-        document.getElementById('welcomeScreen').style.display = 'flex';
-        document.getElementById('chatHeader').style.display = 'none';
-        document.getElementById('messagesContainer').style.display = 'none';
-        document.getElementById('messageInputContainer').style.display = 'none';
+        document.getElementById('welcomeScreen').classList.remove('view-hidden');
+        document.getElementById('chatHeader').classList.remove('view-visible');
+        document.getElementById('messagesContainer').classList.remove('view-visible');
+        document.getElementById('messageInputContainer').classList.remove('view-visible');
     }
 }
 
@@ -1591,14 +1489,6 @@ function editProfile() {
     document.getElementById('editProfileBtn').style.display = 'none';
     document.getElementById('saveProfileBtn').style.display = 'block';
     document.getElementById('changeUsernameBtn').style.display = 'none';
-}
-
-function toggleAvatarSelector() {
-    return false;
-}
-
-function selectAvatar(avatarNum) {
-    return false;
 }
 
 function uploadAvatar(event) {
@@ -1690,7 +1580,7 @@ async function saveProfile() {
         
     } catch (error) {
         console.error('Error saving profile:', error);
-        customAlert('Ошибка сохранения профиля. Попробуйте еще раз.');
+        await customAlert('Ошибка сохранения профиля. Попробуйте еще раз.');
     }
 }
 
@@ -1854,10 +1744,6 @@ function toggleSidebar() {
     } else {
         document.getElementById('sidebar').classList.toggle('open');
     }
-}
-
-function closeSidebar() {
-    document.getElementById('sidebar').classList.remove('open');
 }
 
 async function clearCurrentChat() {
